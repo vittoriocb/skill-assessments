@@ -1,0 +1,65 @@
+---
+title: "R for Data Science"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(plotly)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+```
+
+1. Read in the `gapminder_clean.csv` data as a `tibble` using `read_csv`.
+
+```{r}
+df = as_tibble(read.csv("gapminder_clean.csv", check.names=FALSE)[,-1])
+
+head(df)
+```
+
+2. Filter the data to include only rows where `Year` is `1962` and then make a scatter plot comparing `'CO2 emissions (metric tons per capita)'` and `gdpPercap` for the filtered data. 
+
+```{r}
+df_1962 = df %>% filter(Year == 1962) 
+
+p = df_1962 %>% filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`)) %>% 
+  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`, text=`Country Name`)) + 
+  geom_point() +  labs(title="CO2 emissions vs GDP") + theme_bw() + scale_y_log10() + scale_x_log10() + labs(x="GPD Per Capita")
+  
+ggplotly(p)
+
+
+```
+3. On the filtered data, calculate the correlation of `'CO2 emissions (metric tons per capita)'` and `gdpPercap`. What is the correlation and associated p value?
+
+```{r}
+cor.test(df_1962$gdpPercap, df_1962$`CO2 emissions (metric tons per capita)`, use = "complete.obs")
+
+```
+4. On the unfiltered data, answer "In what year is the correlation between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` the strongest?" Filter the dataset to that year for the next step...
+
+```{r}
+df %>%
+  group_by(Year) %>%
+  summarize(Correlation=cor(gdpPercap, `CO2 emissions (metric tons per capita)`,use = "complete.obs")) %>%
+  arrange(desc(Correlation))
+
+```
+
+5. Using `plotly`, create an interactive scatter plot comparing `'CO2 emissions (metric tons per capita)'` and `gdpPercap`, where the point size is determined by `pop` (population) and the color is determined by the `continent`. You can easily convert any `ggplot` plot to a `plotly` plot using the `ggplotly()` command.
+
+```{r}
+
+df_1967 = df %>% filter(Year == 1967) 
+
+p = df_1967 %>% filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`))  %>% 
+  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`, text=`Country Name`, col=continent, size=pop)) + 
+  geom_point() + labs(title="CO2 emissions vs GDP") + theme_bw() + scale_y_log10() + scale_x_log10() + labs(x="GPD Per Capita")
+  
+ggplotly(p)
+
+```
+
