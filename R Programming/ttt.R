@@ -91,7 +91,7 @@ start_game <- function(con){
   print_board(board)
   
   while (T) {
-    cat(paste0("Player (",turn,") enter coordinates: "))
+    cat(paste0("Player (",turn,") enter coordinates (e.g. A3): "))
     input <- toupper(readLines(con=con,n=1))
     
     if (input == "Q") {
