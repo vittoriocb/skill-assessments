@@ -10,24 +10,33 @@ library(plotly)
 library(ggplot2)
 library(tibble)
 library(dplyr)
+
 ```
+
+## SECTION I
 
 1. Read in the `gapminder_clean.csv` data as a `tibble` using `read_csv`.
 
 ```{r}
-df = as_tibble(read.csv("gapminder_clean.csv", check.names=FALSE)[,-1])
+df = as_tibble(read.csv("gapminder_clean.csv", check.names=FALSE, stringsAsFactors=T)[,-1])
 
 head(df)
 ```
 
 2. Filter the data to include only rows where `Year` is `1962` and then make a scatter plot comparing `'CO2 emissions (metric tons per capita)'` and `gdpPercap` for the filtered data. 
 
-```{r}
-df_1962 = df %>% filter(Year == 1962) 
+```{r, warning=FALSE}
+df_1962 = df %>% 
+            filter(Year == 1962) %>%
+            filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`)) %>%
+            dplyr::select(`Country Name`, Year, gdpPercap, `CO2 emissions (metric tons per capita)`)
 
-p = df_1962 %>% filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`)) %>% 
-  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`, text=`Country Name`)) + 
-  geom_point() +  labs(title="CO2 emissions vs GDP") + theme_bw() + scale_y_log10() + scale_x_log10() + labs(x="GPD Per Capita")
+summary(df_1962)
+
+p = df_1962 %>% 
+            ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) + 
+            geom_point(aes(text=`Country Name`)) +  labs(title="CO2 emissions vs GDP", x="GPD Per Capita") + theme_bw() + scale_y_log10() + scale_x_log10() + 
+            geom_smooth(method=lm) 
   
 ggplotly(p)
 
@@ -51,15 +60,161 @@ df %>%
 
 5. Using `plotly`, create an interactive scatter plot comparing `'CO2 emissions (metric tons per capita)'` and `gdpPercap`, where the point size is determined by `pop` (population) and the color is determined by the `continent`. You can easily convert any `ggplot` plot to a `plotly` plot using the `ggplotly()` command.
 
-```{r}
+```{r, warning=FALSE}
 
-df_1967 = df %>% filter(Year == 1967) 
+df_1967 = df %>% 
+  filter(Year == 1967)  %>% 
+  filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`)) %>% 
+  dplyr::select(`Country Name`, Year, gdpPercap, `CO2 emissions (metric tons per capita)`, continent, pop)
 
-p = df_1967 %>% filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`))  %>% 
-  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`, text=`Country Name`, col=continent, size=pop)) + 
-  geom_point() + labs(title="CO2 emissions vs GDP") + theme_bw() + scale_y_log10() + scale_x_log10() + labs(x="GPD Per Capita")
+summary(df_1967)
+
+p = df_1967 %>% 
+  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) + 
+  geom_point(aes(text=`Country Name`, col=continent, size=pop)) + labs(title="CO2 emissions vs GDP", x="GPD Per Capita") + theme_bw() + scale_y_log10() + scale_x_log10() +
+  geom_smooth(method=lm)
   
 ggplotly(p)
 
+```
+
+## SECTION II
+
+1. What is the relationship between `continent` and `'Energy use (kg of oil equivalent per capita)'`? (stats test needed)
+
+```{r}
+df_continent = df %>% filter(continent !="" & !is.na(`Energy use (kg of oil equivalent per capita)`)) %>% dplyr::select(continent,`Energy use (kg of oil equivalent per capita)`)
+
+summary(df_continent)
+
+
+```
+
+
+```{r}
+
+model_base <- lm(`Energy use (kg of oil equivalent per capita)`~continent, df_continent)
+
+summary(model_base)
+plot(model_base)
+
+```
+
+```{r}
+
+
+model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`)~continent, df_continent)
+
+summary(model_log)
+plot(model_log)
+
+
+p = ggplot(df_continent, aes(x=continent, y = `Energy use (kg of oil equivalent per capita)`)) + geom_boxplot() + scale_y_log10()
+
+ggplotly(p)
+
+```
+
+```{r}
+
+df_continent = df %>% filter(continent !="" & !is.na(`Energy use (kg of oil equivalent per capita)`))
+print(unique(df_continent$continent))
+model_log <- aov(log10(`Energy use (kg of oil equivalent per capita)`)~continent, df_continent)
+
+summary(model_log)
+
+model_log
+
+```
+
+
+2. Is there a significant difference between Europe and Asia with respect to `'Imports of goods and services (% of GDP)'` in the years after 1990? (stats test needed)
+
+```{r}
+
+df_1990 = df %>% 
+            filter(Year > 1990 & continent %in% c("Europe","Asia") & !is.na(`Imports of goods and services (% of GDP)`)) %>% 
+            dplyr::select(continent,`Imports of goods and services (% of GDP)`, Year)
+
+summary(df_1990)
+
+anova = aov(`Imports of goods and services (% of GDP)`~continent, df_1990)
+
+summary(anova)
+
+p = df_1990 %>% ggplot(aes(x=continent, y=`Imports of goods and services (% of GDP)`)) + geom_boxplot()
+
+ggplotly(p)
+```
+
+
+
+3. What is the country (or countries) that has the highest `'Population density (people per sq. km of land area)'` across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)
+
+
+```{r}
+df_pop = df %>%
+              filter(!is.na(`Population density (people per sq. km of land area)`)) %>%
+              group_by(`Country Name`) %>%
+              summarize(AvgPopDensity=mean(`Population density (people per sq. km of land area)`)) %>%
+              arrange(desc(AvgPopDensity))
+              
+summary(df_pop)
+              
+
+
+```
+
+
+```{r}
+
+df_pop_top = df_pop %>% 
+                top_n(5, wt=AvgPopDensity)
+
+p = df %>% 
+      filter(`Country Name` %in% df_top_pop$`Country Name`) %>% 
+      ggplot(aes(y=`Population density (people per sq. km of land area)`,x=reorder(`Country Name`, -`Population density (people per sq. km of land area)`), col=`Country Name`)) +   
+      geom_boxplot() + labs(title="Top 5 countries by pop. density", x="Country") + 
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggplotly(p)
+
+```
+
+4. What country (or countries) has shown the greatest increase in `'Life expectancy at birth, total (years)'` since 1962? 
+
+```{r}
+df_life_incr = df %>%
+  group_by(`Country Name`) %>%
+  filter(!is.na(`Life expectancy at birth, total (years)`)) %>%
+  mutate(`Life expectancy 1962`=`Life expectancy at birth, total (years)`[match(1962, Year)], .keep="all") %>%
+  filter(!is.na(`Life expectancy 1962`)) %>%
+  filter(Year==2007) %>%
+  mutate(Increase_LE=`Life expectancy at birth, total (years)`/`Life expectancy 1962`) %>%
+  dplyr::select(continent, `Country Name`, `Life expectancy 1962`, `Life expectancy at birth, total (years)`, Increase_LE) %>%
+  arrange(desc(Increase_LE)) %>%
+  ungroup()
+
+summary(df_life_incr)
+```
+```{r}
+p = df_life_incr %>%
+  ggplot(aes(y=Increase_LE,x=reorder(`Country Name`, -Increase_LE))) + 
+  geom_point()  + labs(title="Countries by life expectancy increase since 1962")  +
+  geom_hline(yintercept=mean(df_life_incr$Increase_LE), linetype="dotted", color = "blue") +
+    theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+ggplotly(p)
+```
+
+```{r}
+p = df_life_incr %>% top_n(11, wt=Increase_LE) %>% 
+  ggplot(aes(y=Increase_LE,x=reorder(`Country Name`, -Increase_LE), fill=`Country Name`)) + 
+  geom_bar(stat="identity")  + labs(title="Top countries by life expectancy increase since 1962", x="Country") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggplotly(p)
 ```
 
