@@ -12,4 +12,4 @@ I included some basic unit tests (it has much room for improvement).
 
 To run the tests, first install testthat package by running `install.packages("testthat")`
 
-Then make sure you are in the project directory and run `Rscript tests/testthat test-ttt.R` in the terminal or run in RStudio.
+Then make sure you are in the project directory and run `Rscript tests/testthat/test-ttt.R` in the terminal or run in RStudio.
