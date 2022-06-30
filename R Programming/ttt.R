@@ -151,6 +151,9 @@ init <- function(){
 
 
 if (!exists("LOADED_TEST") || (LOADED_TEST != "tictactoe")) {
+  # This is my adaptation of python's if __name__ == "__main__": 
+  # I do this in order to keep functions and the executable in a single file, while
+  # being able to load the source for unit testing
   init()
 }
 
