@@ -133,4 +133,11 @@ test_that("computer_play", {
     c(NA, NA, NA)
   )
   expect_equal(computer_play(board, "O"), "C1")
+  
+  board <- rbind(
+    c("X", "X", "O"),
+    c("O", "O", "X"),
+    c("X", "O", "X")
+  )
+  expect_equal(computer_play(board, "O"), "")
 })

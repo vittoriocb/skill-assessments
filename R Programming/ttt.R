@@ -11,6 +11,12 @@ computer_play <- function(board, symbol) {
 
   empty_spaces <- which(is.na(board), arr.ind = TRUE)
 
+  # A stalemate should always be declared before reaching this point, but
+  # just in case
+  if (nrow(empty_spaces) == 0) {
+    return("")
+  }
+
   # Is there a move to make to win this round?
   for (i in seq(1, nrow(empty_spaces))) {
     row <- empty_spaces[i, 1]
@@ -151,13 +157,16 @@ start_game <- function(con) {
     player_symbol <- toupper(readLines(con = con, n = 1))
   }
 
-  counter <- 0
-  while (counter < 200) {
-    counter <- counter + 1
+  while (TRUE) {
     new_board <- numeric(1)
 
     if (turn != player_symbol) {
-      new_board <- add_to_board(board, turn, computer_play(board, turn))
+      play <- computer_play(board, turn)
+      if (play == "") {
+        cat("Oops, I cannot play a tile, this shouldn't have happened.", "\n")
+        break
+      }
+      new_board <- add_to_board(board, turn, play)
     } else {
       cat(paste0("Player (", turn, ") enter coordinates (e.g. A3): "))
       input <- toupper(readLines(con = con, n = 1))
@@ -174,22 +183,31 @@ start_game <- function(con) {
     } else {
       board <- new_board
       # did player turn win?
-      win <- win_condition(board)
+      game_status <- win_condition(board)
 
       print_board(board)
 
-      if (win == status_won) {
-        cat(paste0("Congratulations player ", turn, ". You won!"),
-          sep = "\n"
-        )
-        break
-      } else if (win == status_stalemate) {
-        cat(paste0("Stalemate. I declare a draw."), sep = "\n")
+      if (is_game_finished(game_status, turn)) {
         break
       }
+
       turn <- next_turn(turn)
     }
   }
+}
+
+is_game_finished <- function(game_status, turn) {
+  if (game_status == status_won) {
+    cat(paste0("Congratulations player ", turn, ". You won!"),
+      sep = "\n"
+    )
+    return(TRUE)
+  } else if (game_status == status_stalemate) {
+    cat(paste0("Stalemate. I declare a draw."), sep = "\n")
+    return(TRUE)
+  }
+
+  return(FALSE)
 }
 
 print_board <- function(board) {
