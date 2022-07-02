@@ -5,6 +5,46 @@ status_won <- 1
 status_in_progress <- 2
 status_stalemate <- 3
 
+
+computer_play <- function(board, symbol) {
+  # Reads the board and returns a choice of coordinates
+
+  empty_spaces <- which(is.na(board), arr.ind = TRUE)
+
+  # Is there a move to make to win this round?
+  for (i in seq(1, nrow(empty_spaces))) {
+    row <- empty_spaces[i, 1]
+    col <- empty_spaces[i, 2]
+    input <- indices_to_coord(row, col)
+
+    if (win_condition(add_to_board(board, symbol, input)) == status_won) {
+      return(input)
+    }
+  }
+
+  # Check if opponent can win
+  for (i in seq(1, nrow(empty_spaces))) {
+    row <- empty_spaces[i, 1]
+    col <- empty_spaces[i, 2]
+    input <- indices_to_coord(row, col)
+
+    if (win_condition(add_to_board(board, next_turn(symbol), input)) ==
+      status_won) {
+      return(input)
+    }
+  }
+
+  # If could not find a winning move then play a random available cell
+  i <- runif(1, min = 1, max = nrow(empty_spaces))
+  row <- empty_spaces[i, 1]
+  col <- empty_spaces[i, 2]
+  return(indices_to_coord(row, col))
+}
+
+indices_to_coord <- function(row, col) {
+  return(paste0(col_names[col], row_names[row]))
+}
+
 win_condition <- function(board) {
   # a win conditions matrix, in reality there are 8 win conditions:
   # 3 rows, 3 columns and 2 diagonals. The extra cell in the matrix
@@ -105,16 +145,29 @@ start_game <- function(con) {
   turn <- symbols[1]
 
   print_board(board)
+  player_symbol <- character(1)
+  while (!(player_symbol %in% symbols)) {
+    cat(paste0("Player please choose your symbol (X/O): "))
+    player_symbol <- toupper(readLines(con = con, n = 1))
+  }
 
-  while (TRUE) {
-    cat(paste0("Player (", turn, ") enter coordinates (e.g. A3): "))
-    input <- toupper(readLines(con = con, n = 1))
+  counter <- 0
+  while (counter < 200) {
+    counter <- counter + 1
+    new_board <- numeric(1)
 
-    if (input == "Q") {
-      cat("Oops, game has been halted.", sep = "\n")
-      break
+    if (turn != player_symbol) {
+      new_board <- add_to_board(board, turn, computer_play(board, turn))
+    } else {
+      cat(paste0("Player (", turn, ") enter coordinates (e.g. A3): "))
+      input <- toupper(readLines(con = con, n = 1))
+
+      if (input == "Q") {
+        cat("Oops, game has been halted.", sep = "\n")
+        break
+      }
+      new_board <- add_to_board(board, turn, input)
     }
-    new_board <- add_to_board(board, turn, input)
 
     if (length(new_board) == 1) {
       cat("User input is invalid, try again", sep = "\n")
@@ -145,6 +198,8 @@ print_board <- function(board) {
   board[is.na(board)] <- "_"
   print(as.data.frame(board))
 }
+
+
 
 init <- function() {
   if (interactive()) {
