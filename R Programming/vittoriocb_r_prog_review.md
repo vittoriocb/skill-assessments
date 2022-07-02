@@ -4,7 +4,7 @@
 
 > 1. Functioning: The programme fails to comply to the Person vs Computer requirement as mentioned in the [skill assessment](https://github.com/Bioinformatics-Research-Network/skill-assessments/tree/main/R%20Programming).
 
-TODO
+I previously missed this instruction, fixed now
 
 
 > 2. Formatting style:  
