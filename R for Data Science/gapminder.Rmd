@@ -3,8 +3,8 @@ title: "R for Data Science"
 output:
   html_document:
     toc: yes
-  pdf_document:
-    toc: yes
+    code_folding: hide
+  
 ---
 
 ```{r setup, include=FALSE}
@@ -356,8 +356,11 @@ The plot below shows the distribution of life expectancy increase (`Increase_LE`
 df_life_incr <- df %>%
   group_by(`Country Name`) %>%
   filter(!is.na(`Life expectancy at birth, total (years)`)) %>%
-  mutate(`Life expectancy 1962` = `Life expectancy at birth,
-         total (years)`[match(1962, Year)], .keep = "all") %>%
+  mutate(
+    `Life expectancy 1962` =
+      `Life expectancy at birth, total (years)`[match(1962, Year)],
+    .keep = "all"
+  ) %>%
   filter(!is.na(`Life expectancy 1962`)) %>%
   filter(Year == 2007) %>%
   mutate(
