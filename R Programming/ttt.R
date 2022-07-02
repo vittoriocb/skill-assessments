@@ -187,7 +187,7 @@ start_game <- function(con) {
 
       print_board(board)
 
-      if (is_game_finished(game_status, turn)) {
+      if (is_game_finished(game_status, turn, player_symbol)) {
         break
       }
 
@@ -196,11 +196,14 @@ start_game <- function(con) {
   }
 }
 
-is_game_finished <- function(game_status, turn) {
+is_game_finished <- function(game_status, turn, player_symbol) {
   if (game_status == status_won) {
-    cat(paste0("Congratulations player ", turn, ". You won!"),
-      sep = "\n"
-    )
+    if (turn == player_symbol) {
+      cat(paste0("Congratulations player ", turn, ". You won!"))
+    } else {
+      cat(paste0("The computer won this game, better luck next time."))
+    }
+    cat("\n")
     return(TRUE)
   } else if (game_status == status_stalemate) {
     cat(paste0("Stalemate. I declare a draw."), sep = "\n")
