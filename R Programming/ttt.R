@@ -28,7 +28,7 @@ win_condition <- function(board) {
     F)
   
   # return 1 if any of the win conditions are met
-  if (any(cond == T)) {
+  if (any(cond)) {
     return(STATUS.WON)
   }
   else {
