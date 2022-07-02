@@ -19,7 +19,7 @@ win_condition <- function(board) {
     unique(x)[1] %in% symbols && length(unique(x)) == 1
   })
   # diagonals
-  dboard <- rbind(diag(board), diag(board[, order(ncol(board):1)]))
+  dboard <- rbind(diag(board), diag(board[, order(seq(ncol(board), 1))]))
   # only 2 diagonals so fill with FALSE
   cond[3, ] <- c(
     apply(dboard, 1, function(x) {
@@ -164,7 +164,7 @@ init <- function() {
 }
 
 
-if (!exists("LOADED_TEST") || (LOADED_TEST != "tictactoe")) {
+if (!exists("loaded_test") || (loaded_test != "tictactoe")) {
   # This is my adaptation of python's if __name__ == "__main__":
   # I do this in order to keep functions and the executable in a single file,
   # while being able to load the source for unit testing
