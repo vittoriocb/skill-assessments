@@ -33,28 +33,34 @@ Empty strings were converted to NA values. It can be observed that there is an i
 There is a total of 263 countries across 10 specific years spanning from 1962 to 2007 in increments of 5 (e.g. 1962, 1967, 1972, etc), including 6 continents.   
 
 ```{r}
-df = as_tibble(read.csv("gapminder_clean.csv", check.names=F, stringsAsFactors=T)[,-1]) %>% 
-        mutate_all(~na_if(.,"")) %>%
-        mutate(Year = as.factor(Year))
+df <- as_tibble(read.csv("gapminder_clean.csv",
+  check.names = FALSE,
+  stringsAsFactors = TRUE
+)[, -1]) %>%
+  mutate_all(~ na_if(., "")) %>%
+  mutate(Year = as.factor(Year))
 
 dim(df)
 
 
-data.frame(`Unique values`=sapply(lapply(df, unique), length), `NA count`=colSums(is.na(df)), Type=sapply(df, class), check.names=F)
-
-
+data.frame(
+  `Unique values` = sapply(lapply(df, unique), length),
+  `NA count` = colSums(is.na(df)), Type = sapply(df, class),
+  check.names = FALSE
+)
 ```
 ### Continuous variables distributions
 
 Most continuous variables show a somewhat exponential distribution. The exceptions being: `Fertility rate, total (births per woman)` (somewhat uniform), `Life expectancy at birth, total (years)` (somewhat normal with a skew), and `Services, etc., value added (% of GDP)` (normal).   
 
 ```{r, fig.width=20, fig.height=12}
-#conts <- sapply(df, function(x) !is.factor(x))
-
-df %>% dplyr::select(where(is.numeric)) %>% gather() %>% filter(!is.na(value))  %>%
-  ggplot(aes(value)) + 
-    geom_histogram(bins = 10) + 
-    facet_wrap(~key, scales = 'free')
+df %>%
+  dplyr::select(where(is.numeric)) %>%
+  gather() %>%
+  filter(!is.na(value)) %>%
+  ggplot(aes(value)) +
+  geom_histogram(bins = 10) +
+  facet_wrap(~key, scales = "free")
 ```
 
 
@@ -66,21 +72,27 @@ df %>% dplyr::select(where(is.numeric)) %>% gather() %>% filter(!is.na(value))  
 After filtering for the desired year, there is corresponding data for 108 countries (removing NA values). `gdpPercap` ranges from 355 to 95,458, and showing a fairly linear relationship with `CO2 emissions (metric tons per capita)` which ranges from 0.01 to 42.64.   
 
 ```{r, warning=FALSE}
-df_1962 = df %>% 
-            filter(Year == 1962) %>%
-            filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`)) %>%
-            dplyr::select(`Country Name`, Year, gdpPercap, `CO2 emissions (metric tons per capita)`)
+df_1962 <- df %>%
+  filter(Year == 1962) %>%
+  filter(!is.na(gdpPercap) &
+    !is.na(`CO2 emissions (metric tons per capita)`)) %>%
+  dplyr::select(
+    `Country Name`, Year, gdpPercap,
+    `CO2 emissions (metric tons per capita)`
+  )
 
 summary(df_1962)
 
-p = df_1962 %>% 
-            ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) + 
-            geom_point(aes(text=`Country Name`)) +  labs(title="CO2 emissions vs GDP", x="GPD Per Capita") + theme_bw() + scale_y_log10() + scale_x_log10() + 
-            geom_smooth(method=lm) 
-  
+p <- df_1962 %>%
+  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) +
+  geom_point(aes(text = `Country Name`)) +
+  labs(title = "CO2 emissions vs GDP", x = "GPD Per Capita") +
+  theme_bw() +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth(method = lm)
+
 ggplotly(p)
-
-
 ```
 
 
@@ -92,8 +104,9 @@ The correlation between said variables is 0.9261 with a p-value < 2.2e-16 (highl
 
 ```{r}
 
-cor.test(df_1962$gdpPercap, df_1962$`CO2 emissions (metric tons per capita)`, use = "complete.obs")
-
+cor.test(df_1962$gdpPercap, df_1962$`CO2 emissions (metric tons per capita)`,
+  use = "complete.obs"
+)
 ```
 ## Q4
 
@@ -104,9 +117,11 @@ Correlation between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` i
 ```{r}
 df %>%
   group_by(Year) %>%
-  summarize(Correlation=cor(gdpPercap, `CO2 emissions (metric tons per capita)`,use = "complete.obs")) %>%
+  summarize(Correlation = cor(gdpPercap,
+    `CO2 emissions (metric tons per capita)`,
+    use = "complete.obs"
+  )) %>%
   arrange(desc(Correlation))
-
 ```
 
 ## Q5
@@ -117,20 +132,27 @@ Corresponding data exist for 113 countries for year 1967. The relationship betwe
 
 ```{r, warning=FALSE}
 
-df_1967 = df %>% 
-  filter(Year == 1967)  %>% 
-  filter(!is.na(gdpPercap) & !is.na(`CO2 emissions (metric tons per capita)`)) %>% 
-  dplyr::select(`Country Name`, Year, gdpPercap, `CO2 emissions (metric tons per capita)`, continent, pop)
+df_1967 <- df %>%
+  filter(Year == 1967) %>%
+  filter(!is.na(gdpPercap) &
+    !is.na(`CO2 emissions (metric tons per capita)`)) %>%
+  dplyr::select(
+    `Country Name`, Year, gdpPercap,
+    `CO2 emissions (metric tons per capita)`, continent, pop
+  )
 
 summary(df_1967)
 
-p = df_1967 %>% 
-      ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) + 
-      geom_point(aes(text=`Country Name`, col=continent, size=pop)) + labs(title="CO2 emissions vs GDP", x="GPD Per Capita") + theme_bw() + scale_y_log10() + scale_x_log10() +
-      geom_smooth(method=lm)
-  
-ggplotly(p)
+p <- df_1967 %>%
+  ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) +
+  geom_point(aes(text = `Country Name`, col = continent, size = pop)) +
+  labs(title = "CO2 emissions vs GDP", x = "GPD Per Capita") +
+  theme_bw() +
+  scale_y_log10() +
+  scale_x_log10() +
+  geom_smooth(method = lm)
 
+ggplotly(p)
 ```
 
 # SECTION II
@@ -143,13 +165,16 @@ ggplotly(p)
 There is a total of 848 row without NA values. Observation count is fairly balanced between continents with the exception of Oceania, where there is data for only 20 rows.      
 
 ```{r}
-df_continent = df %>% 
-                filter(!is.na(continent) & !is.na(`Energy use (kg of oil equivalent per capita)`)) %>% 
-                dplyr::select(continent,`Energy use (kg of oil equivalent per capita)`, pop, `Country Name`)
+df_continent <- df %>%
+  filter(!is.na(continent) &
+    !is.na(`Energy use (kg of oil equivalent per capita)`)) %>%
+  dplyr::select(
+    continent,
+    `Energy use (kg of oil equivalent per capita)`, pop,
+    `Country Name`
+  )
 dim(df_continent)
 summary(df_continent)
-
-
 ```
 ### Exploring a linear regression 
 
@@ -165,11 +190,13 @@ Overall, adjusted R-squared is 0.1924 meaning that ~19% of observed variance in 
 
 ```{r}
 
-model_base <- lm(`Energy use (kg of oil equivalent per capita)`~continent, df_continent)
+model_base <- lm(
+  `Energy use (kg of oil equivalent per capita)` ~ continent,
+  df_continent
+)
 
 summary(model_base)
 plot(model_base)
-
 ```
 ### Log transforming variables
 
@@ -188,12 +215,11 @@ While interpreting the coefficients, as shown below, for the log transformed mod
 
 ```{r}
 
-model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`)~continent, df_continent)
+model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
+  continent, df_continent)
 
 summary(model_log)
 plot(model_log)
-
-
 ```
 
 
@@ -211,10 +237,15 @@ It is to be noted that the countries with the max consumption of energy is seen 
 
 ```{r, warning=F}
 
-p = df_continent %>% 
-      ggplot(aes(x = continent, y = `Energy use (kg of oil equivalent per capita)`)) + 
-      geom_boxplot(aes(col=continent)) + labs(title="Energy use vs continent", x="GPD Per Capita") + scale_y_log10()
-  
+p <- df_continent %>%
+  ggplot(aes(
+    x = continent,
+    y = `Energy use (kg of oil equivalent per capita)`
+  )) +
+  geom_boxplot(aes(col = continent)) +
+  labs(title = "Energy use vs continent", x = "GPD Per Capita") +
+  scale_y_log10()
+
 ggplotly(p)
 ```
 ### ANOVA
@@ -223,15 +254,16 @@ Not surprisingly, ANOVA confirms that there are statistical differences between 
 
 ```{r}
 
-df_continent = df %>% 
-                  filter(!is.na(continent) & !is.na(`Energy use (kg of oil equivalent per capita)`))
+df_continent <- df %>%
+  filter(!is.na(continent) &
+    !is.na(`Energy use (kg of oil equivalent per capita)`))
 
-model_log <- aov(log10(`Energy use (kg of oil equivalent per capita)`)~continent, df_continent)
+model_log <- aov(log10(`Energy use (kg of oil equivalent per capita)`) ~
+  continent, df_continent)
 
 summary(model_log)
 
 model_log
-
 ```
 
 
@@ -245,18 +277,24 @@ The box plot below visually confirms the aforementioned. Both samples have a sim
 
 ```{r}
 
-df_1990 = df %>% 
-            filter(as.numeric(as.character(Year)) > 1990 & continent %in% c("Europe","Asia") & !is.na(`Imports of goods and services (% of GDP)`)) %>% 
-            dplyr::select(continent,`Imports of goods and services (% of GDP)`, Year)
+df_1990 <- df %>%
+  filter(as.numeric(as.character(Year)) > 1990 &
+    continent %in% c("Europe", "Asia") &
+    !is.na(`Imports of goods and services (% of GDP)`)) %>%
+  dplyr::select(continent, `Imports of goods and services (% of GDP)`, Year)
 
 summary(df_1990)
 
-anova = aov(`Imports of goods and services (% of GDP)`~continent, df_1990)
+anova <- aov(`Imports of goods and services (% of GDP)` ~ continent, df_1990)
 
 summary(anova)
 
-p = df_1990 %>% 
-      ggplot(aes(x=continent, y=`Imports of goods and services (% of GDP)`, col=continent)) + geom_boxplot()
+p <- df_1990 %>%
+  ggplot(aes(
+    x = continent,
+    y = `Imports of goods and services (% of GDP)`, col = continent
+  )) +
+  geom_boxplot()
 
 ggplotly(p)
 ```
@@ -271,30 +309,39 @@ Average population density varies greatly from 0.139 to 14,732. The top 2 countr
 
 
 ```{r}
-df_pop = df %>%
-              filter(!is.na(`Population density (people per sq. km of land area)`)) %>%
-              group_by(`Country Name`) %>%
-              summarize(AvgPopDensity=mean(`Population density (people per sq. km of land area)`)) %>%
-              arrange(desc(AvgPopDensity))
-              
+df_pop <- df %>%
+  filter(!is.na(`Population density (people per sq. km of land area)`)) %>%
+  group_by(`Country Name`) %>%
+  summarize(
+    AvgPopDensity =
+      mean(`Population density (people per sq. km of land area)`)
+  ) %>%
+  arrange(desc(AvgPopDensity))
+
 summary(df_pop)
-              
 ```
 
 
 ```{r}
 
-df_pop_top = df_pop %>% 
-                top_n(5, wt=AvgPopDensity)
+df_pop_top <- df_pop %>%
+  top_n(5, wt = AvgPopDensity)
 
-p = df %>% 
-      filter(`Country Name` %in% df_pop_top$`Country Name`) %>% 
-      ggplot(aes(y=`Population density (people per sq. km of land area)`,x=reorder(`Country Name`, -`Population density (people per sq. km of land area)`), col=`Country Name`)) +   
-      geom_boxplot() + labs(title="Top 5 countries by pop. density", x="Country") + 
-      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p <- df %>%
+  filter(`Country Name` %in% df_pop_top$`Country Name`) %>%
+  ggplot(aes(
+    y = `Population density (people per sq. km of land area)`,
+    x = reorder(
+      `Country Name`,
+      -`Population density (people per sq. km of land area)`
+    ),
+    col = `Country Name`
+  )) +
+  geom_boxplot() +
+  labs(title = "Top 5 countries by pop. density", x = "Country") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 ggplotly(p)
-
 ```
 
 ## Q4
@@ -306,38 +353,59 @@ In average, all countries increased life expectancy by ~30% from 1962 to 2007 (s
 The plot below shows the distribution of life expectancy increase (`Increase_LE`) across countries. Something to notice is that after the top 11th country (China) the rate of decrease starts slowing down (showing an elbow in the plot). For this reason, the top 11 countries were selected as the answer to the question presented, and plotted as a bar chart at the end.      
 
 ```{r}
-df_life_incr = df %>%
-                  group_by(`Country Name`) %>%
-                  filter(!is.na(`Life expectancy at birth, total (years)`)) %>%
-                  mutate(`Life expectancy 1962`=`Life expectancy at birth, total (years)`[match(1962, Year)], .keep="all") %>%
-                  filter(!is.na(`Life expectancy 1962`)) %>%
-                  filter(Year==2007) %>%
-                  mutate(Increase_LE=`Life expectancy at birth, total (years)`/`Life expectancy 1962`) %>%
-                  dplyr::select(continent, `Country Name`, `Life expectancy 1962`, `Life expectancy at birth, total (years)`, Increase_LE) %>%
-                  arrange(desc(Increase_LE)) %>%
-                  ungroup()
+df_life_incr <- df %>%
+  group_by(`Country Name`) %>%
+  filter(!is.na(`Life expectancy at birth, total (years)`)) %>%
+  mutate(`Life expectancy 1962` = `Life expectancy at birth,
+         total (years)`[match(1962, Year)], .keep = "all") %>%
+  filter(!is.na(`Life expectancy 1962`)) %>%
+  filter(Year == 2007) %>%
+  mutate(
+    Increase_LE =
+      `Life expectancy at birth, total (years)` /
+        `Life expectancy 1962`
+  ) %>%
+  dplyr::select(
+    continent, `Country Name`, `Life expectancy 1962`,
+    `Life expectancy at birth, total (years)`, Increase_LE
+  ) %>%
+  arrange(desc(Increase_LE)) %>%
+  ungroup()
 
 summary(df_life_incr)
 ```
 ```{r}
-p = df_life_incr %>%
-      ggplot(aes(y=Increase_LE,x=reorder(`Country Name`, -Increase_LE))) + 
-      geom_point()  + labs(title="Countries by life expectancy increase since 1962")  +
-      geom_hline(yintercept=mean(df_life_incr$Increase_LE), linetype="dotted", color = "blue") +
-      theme(axis.title.x=element_blank(),
-      axis.text.x=element_blank(),
-      axis.ticks.x=element_blank())
+p <- df_life_incr %>%
+  ggplot(aes(y = Increase_LE, x = reorder(`Country Name`, -Increase_LE))) +
+  geom_point() +
+  labs(title = "Countries by life expectancy increase since 1962") +
+  geom_hline(
+    yintercept = mean(df_life_incr$Increase_LE),
+    linetype = "dotted", color = "blue"
+  ) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
 
 ggplotly(p)
 ```
 
 ```{r}
-p = df_life_incr %>% 
-      top_n(11, wt=Increase_LE) %>% 
-      ggplot(aes(y=Increase_LE,x=reorder(`Country Name`, -Increase_LE), fill=`Country Name`)) + 
-      geom_bar(stat="identity")  + labs(title="Top countries by life expectancy increase since 1962", x="Country") + 
-      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+p <- df_life_incr %>%
+  top_n(11, wt = Increase_LE) %>%
+  ggplot(aes(
+    y = Increase_LE, x = reorder(`Country Name`, -Increase_LE),
+    fill = `Country Name`
+  )) +
+  geom_bar(stat = "identity") +
+  labs(
+    title =
+      "Top countries by life expectancy increase since 1962",
+    x = "Country"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 ggplotly(p)
 ```
-
