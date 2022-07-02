@@ -89,49 +89,48 @@ test_that("win_condition", {
     c("X", "O", "X")
   )
   expect_equal(win_condition(board), status_stalemate)
-  
+
   board <- rbind(
-    c("X",  "X", "O"),
-    c(NA,   NA, "O"),
+    c("X", "X", "O"),
+    c(NA, NA, "O"),
     c("X", "O", "X")
   )
   expect_equal(win_condition(board), status_in_progress)
 })
 
 test_that("indices_to_coord", {
-  expect_equal(indices_to_coord(1,3), "C1")
-  expect_equal(indices_to_coord(3,1), "A3")
+  expect_equal(indices_to_coord(1, 3), "C1")
+  expect_equal(indices_to_coord(3, 1), "A3")
 })
 
 
 test_that("computer_play", {
   board <- rbind(
-    c("X", "O",  NA),
-    c(NA,  NA, "O"),
+    c("X", "O", NA),
+    c(NA, NA, "O"),
     c("X", "O", "X")
   )
   expect_equal(computer_play(board, "X"), "A2")
-  
+
   board <- rbind(
-    c("X",  NA, "O"),
-    c(NA,   NA, "O"),
+    c("X", NA, "O"),
+    c(NA, NA, "O"),
     c("X", "O", NA)
   )
   expect_equal(computer_play(board, "O"), "C3")
-  
+
   board <- rbind(
     c("X", "O", NA),
     c(NA, NA, "O"),
     c(NA, "O", "X")
   )
   expect_equal(computer_play(board, "X"), "B2")
-  
-  
+
+
   board <- rbind(
     c("X", "X", NA),
     c(NA, NA, "O"),
     c(NA, NA, NA)
   )
   expect_equal(computer_play(board, "O"), "C1")
-  
 })
