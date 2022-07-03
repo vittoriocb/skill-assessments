@@ -32,7 +32,7 @@ Empty strings were converted to NA values. It can be observed that there is an i
 
 There is a total of 263 countries across 10 specific years spanning from 1962 to 2007 in increments of 5 (e.g. 1962, 1967, 1972, etc), including 6 continents.   
 
-```{r}
+```{r SECTION 1 Q1.1}
 df <- as_tibble(read.csv("gapminder_clean.csv",
   check.names = FALSE,
   stringsAsFactors = TRUE
@@ -49,11 +49,13 @@ data.frame(
   check.names = FALSE
 )
 ```
+
+
 ### Continuous variables distributions
 
 Most continuous variables show a somewhat exponential distribution. The exceptions being: `Fertility rate, total (births per woman)` (somewhat uniform), `Life expectancy at birth, total (years)` (somewhat normal with a skew), and `Services, etc., value added (% of GDP)` (normal).   
 
-```{r, fig.width=20, fig.height=12}
+```{r SECTION 1 Q1.2, fig.width=20, fig.height=12}
 df %>%
   dplyr::select(where(is.numeric)) %>%
   gather() %>%
@@ -71,7 +73,7 @@ df %>%
 
 After filtering for the desired year, there is corresponding data for 108 countries (removing NA values). `gdpPercap` ranges from 355 to 95,458, and showing a fairly linear relationship with `CO2 emissions (metric tons per capita)` which ranges from 0.01 to 42.64.   
 
-```{r, warning=FALSE}
+```{r SECTION 1 Q2, warning=FALSE}
 df_1962 <- df %>%
   filter(Year == 1962) %>%
   filter(!is.na(gdpPercap) &
@@ -102,7 +104,7 @@ ggplotly(p)
 
 The correlation between said variables is 0.9261 with a p-value < 2.2e-16 (highly significant), meaning the data is well correlated.    
 
-```{r}
+```{r SECTION 1 Q3}
 
 cor.test(df_1962$gdpPercap, df_1962$`CO2 emissions (metric tons per capita)`,
   use = "complete.obs"
@@ -114,7 +116,7 @@ cor.test(df_1962$gdpPercap, df_1962$`CO2 emissions (metric tons per capita)`,
 
 Correlation between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` is the strongest on 1967.   
 
-```{r}
+```{r SECTION 1 Q4}
 df %>%
   group_by(Year) %>%
   summarize(Correlation = cor(gdpPercap,
@@ -130,7 +132,7 @@ df %>%
 
 Corresponding data exist for 113 countries for year 1967. The relationship between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` remains highly linear.   
 
-```{r, warning=FALSE}
+```{r SECTION 1 Q5, warning=FALSE}
 
 df_1967 <- df %>%
   filter(Year == 1967) %>%
@@ -164,7 +166,7 @@ ggplotly(p)
 
 There is a total of 848 row without NA values. Observation count is fairly balanced between continents with the exception of Oceania, where there is data for only 20 rows.      
 
-```{r}
+```{r SECTION 2 Q1.1}
 df_continent <- df %>%
   filter(!is.na(continent) &
     !is.na(`Energy use (kg of oil equivalent per capita)`)) %>%
@@ -176,6 +178,7 @@ df_continent <- df %>%
 dim(df_continent)
 summary(df_continent)
 ```
+
 ### Exploring a linear regression 
 
 A linear regression for this data set shows that there are statistically significant differences (p-value: < 2.2e-16) across continents in energy use. Being Oceania the continent with the highest consumption, and the lowest being Africa (which is the base, i.e. just intercept value). The regression coefficients show that, for example Asia consumes, in average, 1169 kg of oil equivalent yearly per person more than Africa, and 164 kg (1169-1005) more than the Americas.   
@@ -188,7 +191,7 @@ Finally `Residuals vs Leverage` plot does not show points beyond Cook's distance
 
 Overall, adjusted R-squared is 0.1924 meaning that ~19% of observed variance in `'Energy use (kg of oil equivalent per capita)'` is explained by `continent`.    
 
-```{r}
+```{r SECTION 2 Q1.2}
 
 model_base <- lm(
   `Energy use (kg of oil equivalent per capita)` ~ continent,
@@ -213,7 +216,7 @@ Overall, this model shows benefits from log transforming `Energy use (kg of oil 
 While interpreting the coefficients, as shown below, for the log transformed model it is important to take into account that the unit is in log10 scale, meaning, for example in the case of Oceania, that the log10 of `Energy use (kg of oil equivalent per capita)` increases by 0.85552 from its base (Africa/the intercept) when the country is in Oceania. As an example, an estimation of the energy use when the country is in Oceania would be: $10^{(2.72558+0.85552)}$
 
 
-```{r}
+```{r SECTION 2 Q1.3}
 
 model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
   continent, df_continent)
@@ -235,7 +238,7 @@ Box plots are shown below. Differences in energy use between continents are evid
 It is to be noted that the countries with the max consumption of energy is seen in America and Europe, while the minimum is seen in Africa.
 
 
-```{r, warning=F}
+```{r SECTION 2 Q1.4, warning=F}
 
 p <- df_continent %>%
   ggplot(aes(
@@ -252,7 +255,7 @@ ggplotly(p)
 
 Not surprisingly, ANOVA confirms that there are statistical differences between continents for the variable in question, showing a very significant p-value of 2e-16 (the interpretation of p-value is explained in more detail in the next analysis).
 
-```{r}
+```{r SECTION 2 Q1.5}
 
 df_continent <- df %>%
   filter(!is.na(continent) &
@@ -275,7 +278,7 @@ Complete corresponding data exists for 212 rows after 1990. An ANOVA test does n
 
 The box plot below visually confirms the aforementioned. Both samples have a similar mean and somewhat similar interquartile range, although dispersion is higher in Asia.   
 
-```{r}
+```{r SECTION 2 Q2}
 
 df_1990 <- df %>%
   filter(as.numeric(as.character(Year)) > 1990 &
@@ -308,7 +311,7 @@ ggplotly(p)
 Average population density varies greatly from 0.139 to 14,732. The top 2 countries with the highest `'Population density (people per sq. km of land area)'` across all years are `Macao SAR, China` and `Monaco`.   
 
 
-```{r}
+```{r SECTION 2 Q3.1}
 df_pop <- df %>%
   filter(!is.na(`Population density (people per sq. km of land area)`)) %>%
   group_by(`Country Name`) %>%
@@ -322,7 +325,7 @@ summary(df_pop)
 ```
 
 
-```{r}
+```{r SECTION 2 Q3.2}
 
 df_pop_top <- df_pop %>%
   top_n(5, wt = AvgPopDensity)
@@ -352,7 +355,7 @@ In average, all countries increased life expectancy by ~30% from 1962 to 2007 (s
 
 The plot below shows the distribution of life expectancy increase (`Increase_LE`) across countries. Something to notice is that after the top 11th country (China) the rate of decrease starts slowing down (showing an elbow in the plot). For this reason, the top 11 countries were selected as the answer to the question presented, and plotted as a bar chart at the end.      
 
-```{r}
+```{r SECTION 2 Q4.1}
 df_life_incr <- df %>%
   group_by(`Country Name`) %>%
   filter(!is.na(`Life expectancy at birth, total (years)`)) %>%
@@ -395,7 +398,7 @@ p <- df_life_incr %>%
 ggplotly(p)
 ```
 
-```{r}
+```{r SECTION 2 Q4.2}
 p <- df_life_incr %>%
   top_n(11, wt = Increase_LE) %>%
   ggplot(aes(
