@@ -1,9 +1,14 @@
 ---
 title: "R for Data Science"
+author: "Vittorio Calcagno"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
+  
   html_document:
     toc: yes
+    toc_float: true
     code_folding: hide
+    theme: flatly
   
 ---
 
@@ -15,6 +20,18 @@ library(ggplot2)
 library(tibble)
 library(dplyr)
 library(tidyr)
+library(knitr)
+library(DT)
+
+percent <- function(x, digits = 2) {
+  paste0(formatC(x * 100, digits = digits, format = "f"), "%")
+}
+
+range_format <- function(x, digits = 4) {
+  paste0(prettyNum(range(x), digits = digits, big.mark = ","),
+    collapse = " to "
+  )
+}
 ```
 
 # SECTION I
@@ -24,13 +41,6 @@ library(tidyr)
 > Read in the `gapminder_clean.csv` data as a `tibble` using `read_csv`.
 
 
-### Variables characterization
-
-There are a total of 19 variables in 2607 rows in the dataset. Most of the variables are continuous, while only `Country Name`, `Year` and `continent` are discrete (All discrete variables will be treated as factors in the remaining of this analysis).    
-
-Empty strings were converted to NA values. It can be observed that there is an important number of NA values in the dataset across almost all variables. NA values are later filtered for the purpose of specific analyses.   
-
-There is a total of 263 countries across 10 specific years spanning from 1962 to 2007 in increments of 5 (e.g. 1962, 1967, 1972, etc), including 6 continents.   
 
 ```{r SECTION 1 Q1.1}
 df <- as_tibble(read.csv("gapminder_clean.csv",
@@ -40,22 +50,33 @@ df <- as_tibble(read.csv("gapminder_clean.csv",
   mutate_all(~ na_if(., "")) %>%
   mutate(Year = as.factor(Year))
 
-dim(df)
+datatable(df, caption = "Loaded dataset")
+```
+### Variables characterization
 
 
-data.frame(
+```{r SECTION 1 Q1.2}
+
+vars <- data.frame(
   `Unique values` = sapply(lapply(df, unique), length),
   `NA count` = colSums(is.na(df)), Type = sapply(df, class),
   check.names = FALSE
 )
+
+kable(vars, caption = "Columns (variables) in dataset")
 ```
 
 
+There are a total of **`r ncol(df)`** variables in **`r nrow(df)`** rows in the dataset. Most of the variables are continuous, while only `Country Name`, `Year` and `continent` are discrete (All discrete variables will be treated as factors in the remaining of this analysis).    
+
+Empty strings were converted to NA values. It can be observed that there is an important number of NA values in the dataset across almost all variables. NA values are later filtered for the purpose of specific analyses.   
+
+There is a total of **`r nrow(unique(df[,"Country Name"]))`** countries across **`r nrow(unique(df[,"Year"]))`** specific years spanning from **`r min(as.numeric(as.character(df$Year)))`** to **`r max(as.numeric(as.character(df$Year)))`** in increments of 5 (e.g. 1962, 1967, 1972, etc), including **`r nrow(unique(df[,"continent"]))`** continents.   
+
 ### Continuous variables distributions
 
-Most continuous variables show a somewhat exponential distribution. The exceptions being: `Fertility rate, total (births per woman)` (somewhat uniform), `Life expectancy at birth, total (years)` (somewhat normal with a skew), and `Services, etc., value added (% of GDP)` (normal).   
 
-```{r SECTION 1 Q1.2, fig.width=20, fig.height=12}
+```{r SECTION 1 Q1.3, fig.width=20, fig.height=12}
 df %>%
   dplyr::select(where(is.numeric)) %>%
   gather() %>%
@@ -65,15 +86,15 @@ df %>%
   facet_wrap(~key, scales = "free")
 ```
 
-
+Most continuous variables show a somewhat exponential distribution. The exceptions being: `Fertility rate, total (births per woman)` (somewhat uniform), `Life expectancy at birth, total (years)` (somewhat normal with a skew), and `Services, etc., value added (% of GDP)` (normal). 
 
 ## Q2
 
 > Filter the data to include only rows where `Year` is `1962` and then make a scatter plot comparing `'CO2 emissions (metric tons per capita)'` and `gdpPercap` for the filtered data. 
 
-After filtering for the desired year, there is corresponding data for 108 countries (removing NA values). `gdpPercap` ranges from 355 to 95,458, and showing a fairly linear relationship with `CO2 emissions (metric tons per capita)` which ranges from 0.01 to 42.64.   
+ 
 
-```{r SECTION 1 Q2, warning=FALSE}
+```{r SECTION 1 Q2.1, warning=FALSE}
 df_1962 <- df %>%
   filter(Year == 1962) %>%
   filter(!is.na(gdpPercap) &
@@ -83,8 +104,11 @@ df_1962 <- df %>%
     `CO2 emissions (metric tons per capita)`
   )
 
-summary(df_1962)
+kable(summary(df_1962, maxsum = 0), caption = "Summary of variables")
+```
+After filtering for the desired year, there is corresponding data for **`r nrow(unique(df_1962[,"Country Name"]))`** countries (removing NA values). `gdpPercap` ranges from **`r range_format(df_1962[,"gdpPercap"])`**, and showing a fairly linear relationship with `CO2 emissions (metric tons per capita)` which ranges from **`r range_format(df_1962[,"CO2 emissions (metric tons per capita)"])`**.  
 
+```{r SECTION 1 Q2.2, warning=FALSE}
 p <- df_1962 %>%
   ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) +
   geom_point(aes(text = `Country Name`)) +
@@ -92,7 +116,7 @@ p <- df_1962 %>%
   theme_bw() +
   scale_y_log10() +
   scale_x_log10() +
-  geom_smooth(method = lm)
+  geom_smooth(method = lm, formula = y ~ x)
 
 ggplotly(p)
 ```
@@ -102,35 +126,45 @@ ggplotly(p)
 
 > On the filtered data, calculate the correlation of `'CO2 emissions (metric tons per capita)'` and `gdpPercap`. What is the correlation and associated p value?
 
-The correlation between said variables is 0.9261 with a p-value < 2.2e-16 (highly significant), meaning the data is well correlated.    
 
 ```{r SECTION 1 Q3}
 
-cor.test(df_1962$gdpPercap, df_1962$`CO2 emissions (metric tons per capita)`,
+result <- cor.test(df_1962$gdpPercap,
+  df_1962$`CO2 emissions (metric tons per capita)`,
   use = "complete.obs"
 )
+
+print(result)
 ```
+
+
+The correlation between said variables is **`r signif(result$estimate, digits = 4)`** with a p-value of **`r signif(result$p.value, digits = 4)`** (highly significant), meaning the data is well correlated.   
+
+
 ## Q4
 
 > On the unfiltered data, answer "In what year is the correlation between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` the strongest?" Filter the dataset to that year for the next step...
 
-Correlation between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` is the strongest on 1967.   
+
 
 ```{r SECTION 1 Q4}
-df %>%
+corr_by_year <- df %>%
   group_by(Year) %>%
   summarize(Correlation = cor(gdpPercap,
     `CO2 emissions (metric tons per capita)`,
     use = "complete.obs"
   )) %>%
   arrange(desc(Correlation))
+
+kable(corr_by_year, caption = "Correlation by year")
 ```
+
+Correlation between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` is the strongest on year **`r corr_by_year[1,1]`**.   
 
 ## Q5
 
 > Using `plotly`, create an interactive scatter plot comparing `'CO2 emissions (metric tons per capita)'` and `gdpPercap`, where the point size is determined by `pop` (population) and the color is determined by the `continent`. You can easily convert any `ggplot` plot to a `plotly` plot using the `ggplotly()` command.
 
-Corresponding data exist for 113 countries for year 1967. The relationship between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` remains highly linear.   
 
 ```{r SECTION 1 Q5, warning=FALSE}
 
@@ -143,7 +177,7 @@ df_1967 <- df %>%
     `CO2 emissions (metric tons per capita)`, continent, pop
   )
 
-summary(df_1967)
+kable(summary(df_1967, maxsum = 0), caption = "Summary of variables")
 
 p <- df_1967 %>%
   ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) +
@@ -152,10 +186,13 @@ p <- df_1967 %>%
   theme_bw() +
   scale_y_log10() +
   scale_x_log10() +
-  geom_smooth(method = lm)
+  geom_smooth(method = lm, formula = y ~ x)
 
 ggplotly(p)
 ```
+
+Corresponding data exist for **`r nrow(unique(df_1967[,1]))`** countries for year 1967. The relationship between `'CO2 emissions (metric tons per capita)'` and `gdpPercap` remains highly linear.   
+
 
 # SECTION II
 
@@ -164,7 +201,7 @@ ggplotly(p)
 > What is the relationship between `continent` and `'Energy use (kg of oil equivalent per capita)'`? (stats test needed)   
 
 
-There is a total of 848 row without NA values. Observation count is fairly balanced between continents with the exception of Oceania, where there is data for only 20 rows.      
+ 
 
 ```{r SECTION 2 Q1.1}
 df_continent <- df %>%
@@ -175,21 +212,19 @@ df_continent <- df %>%
     `Energy use (kg of oil equivalent per capita)`, pop,
     `Country Name`
   )
-dim(df_continent)
-summary(df_continent)
+
+kable(summary(df_continent, maxsum = 6)[, 1:3],
+  caption = "Summary of variables"
+)
 ```
+
+
+There is a total of **`r nrow(df_continent)`** rows without NA values. Observation count is fairly balanced between continents with the exception of Oceania, where there is data for only **`r nrow(df_continent %>% filter(continent == "Oceania"))`** rows.     
+
 
 ### Exploring a linear regression 
 
-A linear regression for this data set shows that there are statistically significant differences (p-value: < 2.2e-16) across continents in energy use. Being Oceania the continent with the highest consumption, and the lowest being Africa (which is the base, i.e. just intercept value). The regression coefficients show that, for example Asia consumes, in average, 1169 kg of oil equivalent yearly per person more than Africa, and 164 kg (1169-1005) more than the Americas.   
-
-Looking at the diagnostic plots, the `Residuals vs Fitted` shows a somewhat horizontal line (with a small valley), hinting that the relationship between the variables is fairly linear but variables could use transformation (explored below), this is supported by the observed separation (points vs dotted line) at the right side of the `Normal Q-Q` plot.    
-
-The `Scale-Location` plot hints heteroscedasticity (non constant variance), which is not surprising because all the others variables in the data set are left out, including a time variable (`Year`), which could hint that the mean of `'Energy use (kg of oil equivalent per capita)'` does not remain constant over time (which is to be expected).   
-
-Finally `Residuals vs Leverage` plot does not show points beyond Cook's distance, hinting that outliers are not to be expected (although there is a set of observations with high leverage, which could be further explored).   
-
-Overall, adjusted R-squared is 0.1924 meaning that ~19% of observed variance in `'Energy use (kg of oil equivalent per capita)'` is explained by `continent`.    
+ 
 
 ```{r SECTION 2 Q1.2}
 
@@ -198,47 +233,91 @@ model_base <- lm(
   df_continent
 )
 
-summary(model_base)
+model_base_summary <- summary(model_base)
+
+model_base_summary
+```
+
+A linear regression for this data set shows that there are statistically significant differences across all continents (p-values < 0.05) in energy use. Being Oceania the continent with the highest consumption, and the lowest being Africa (which is the base, i.e. just intercept value). The regression coefficients show that, for example Asia consumes, in average, 1169 kg of oil equivalent yearly per person more than Africa, and 164 kg ($1169-1005$) more than the Americas.
+
+Overall, adjusted R-squared is **`r model_base_summary$adj.r.squared`** meaning that **`r percent(model_base_summary$adj.r.squared)`** of observed variance in `'Energy use (kg of oil equivalent per capita)'` is explained by `continent`.  
+
+```{r SECTION 2 Q1.3}
 plot(model_base)
 ```
+
+
+Looking at the diagnostic plots, the `Residuals vs Fitted` shows a somewhat horizontal line (with a small valley), hinting that the relationship between the variables is fairly linear but variables could use transformation (explored below), this is supported by the observed separation (points vs dotted line) at the right side of the `Normal Q-Q` plot.    
+
+The `Scale-Location` plot hints heteroscedasticity (non constant variance), which is not surprising because all the others variables in the data set are left out, including a time variable (`Year`), which could hint that the mean of `'Energy use (kg of oil equivalent per capita)'` does not remain constant over time (which is to be expected).   
+
+Finally `Residuals vs Leverage` plot does not show points beyond Cook's distance, hinting that outliers are not to be expected (although there is a set of observations with high leverage, which could be further explored).   
+
+ 
+
+```{r SECTION 2 Q1.4}
+
+model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
+  continent, df_continent)
+
+model_log_summary <- summary(model_log)
+
+model_log_summary
+
+```
+
 ### Log transforming variables
 
 In this case, the only variable that could be transformed is `Energy use (kg of oil equivalent per capita)`, as `continent` is discrete.   
 
-Log transforming energy use improved the fit, yielding an adjusted R-squared of 0.3553 (a significant increase from 0.1924).    
-
-The better fit is also evidenced by improvement in the diagnostic plots. As can be seen in `Residuals vs Fitted` showing a more horizontal line with a smaller peak than previously seen, and `Normal Q-Q` plot showing that the right tail of points follow the dotted line closer.    
-
-`Scale-Location` and `Residuals vs Leverage` remain similar to what was previously seen.    
+Log transforming energy use improved the fit, yielding an adjusted R-squared of **`r model_log_summary$adj.r.squared`** (a significant increase from **`r model_base_summary$adj.r.squared`**).    
 
 Overall, this model shows benefits from log transforming `Energy use (kg of oil equivalent per capita)` as more variance can be explained by continent.   
 
 While interpreting the coefficients, as shown below, for the log transformed model it is important to take into account that the unit is in log10 scale, meaning, for example in the case of Oceania, that the log10 of `Energy use (kg of oil equivalent per capita)` increases by 0.85552 from its base (Africa/the intercept) when the country is in Oceania. As an example, an estimation of the energy use when the country is in Oceania would be: $10^{(2.72558+0.85552)}$
 
 
-```{r SECTION 2 Q1.3}
-
-model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
-  continent, df_continent)
-
-summary(model_log)
+```{r SECTION 2 Q1.5}
 plot(model_log)
 ```
+
+
+The better fit is also evidenced by improvement in the diagnostic plots. As can be seen in `Residuals vs Fitted` showing a more horizontal line with a smaller peak than previously seen, and `Normal Q-Q` plot showing that the right tail of points follow the dotted line closer.    
+
+`Scale-Location` and `Residuals vs Leverage` remain similar to what was previously seen.    
+
+
+
+
+
 
 
 ### Non linear relationships   
 
 Non linear relationships were left out of this analysis.   
 
+### ANOVA
+
+```{r SECTION 2 Q1.6}
+
+df_continent <- df %>%
+  filter(!is.na(continent) &
+    !is.na(`Energy use (kg of oil equivalent per capita)`))
+
+model_log <- aov(log10(`Energy use (kg of oil equivalent per capita)`) ~
+  continent, df_continent)
+
+aov_summary <- summary(model_log)
+
+aov_summary
+```
+
+Not surprisingly, ANOVA confirms that there are statistical differences between continents for the variable in question, showing a very significant p-value of **`r aov_summary[[1]][[5]][1]`** (the interpretation of p-value is explained in more detail in the next analysis).
+
 
 ### Plots   
 
-Box plots are shown below. Differences in energy use between continents are evidenced visually in the boxes, showing different Y-axis locations across continents. Africa is the continent with the smallest energy use, followed by Asia and the Americas which are similar among each other, while Europe is most similar with Oceania (albeit Oceania shows less dispersion, driven mostly by its limited number of observations). 
-
-It is to be noted that the countries with the max consumption of energy is seen in America and Europe, while the minimum is seen in Africa.
-
-
-```{r SECTION 2 Q1.4, warning=F}
+```{r SECTION 2 Q1.7, warning=F}
 
 p <- df_continent %>%
   ggplot(aes(
@@ -251,47 +330,45 @@ p <- df_continent %>%
 
 ggplotly(p)
 ```
-### ANOVA
 
-Not surprisingly, ANOVA confirms that there are statistical differences between continents for the variable in question, showing a very significant p-value of 2e-16 (the interpretation of p-value is explained in more detail in the next analysis).
+Differences in energy use between continents are evidenced visually in the box plot above, showing different Y-axis locations across continents. Africa is the continent with the smallest energy use, followed by Asia and the Americas which are similar among each other, while Europe is most similar with Oceania (albeit Oceania shows less dispersion, driven mostly by its limited number of observations). 
 
-```{r SECTION 2 Q1.5}
-
-df_continent <- df %>%
-  filter(!is.na(continent) &
-    !is.na(`Energy use (kg of oil equivalent per capita)`))
-
-model_log <- aov(log10(`Energy use (kg of oil equivalent per capita)`) ~
-  continent, df_continent)
-
-summary(model_log)
-
-model_log
-```
+It is to be noted that the countries with the max consumption of energy is seen in America and Europe, while the minimum is seen in Africa.
 
 
 ## Q2
 
 > Is there a significant difference between Europe and Asia with respect to `'Imports of goods and services (% of GDP)'` in the years after 1990? (stats test needed)
 
-Complete corresponding data exists for 212 rows after 1990. An ANOVA test does not show significant difference between Europe and Asia with respect to `'Imports of goods and services (% of GDP)'` with a p-value of 0.158 for the F statistic. Meaning there is a 15.8% chance that the observed variation is due to random chance, which is usually not enough to reject the null hypothesis (that the samples come from the same population). P-value should be at least lower than 0.05 to reject the null hypothesis with a 95% confidence interval.   
 
-The box plot below visually confirms the aforementioned. Both samples have a similar mean and somewhat similar interquartile range, although dispersion is higher in Asia.   
-
-```{r SECTION 2 Q2}
-
+```{r SECTION 2 Q2.1}
 df_1990 <- df %>%
   filter(as.numeric(as.character(Year)) > 1990 &
     continent %in% c("Europe", "Asia") &
     !is.na(`Imports of goods and services (% of GDP)`)) %>%
   dplyr::select(continent, `Imports of goods and services (% of GDP)`, Year)
 
-summary(df_1990)
+kable(summary(df_1990), caption = "Summary of variables")
+```
 
+Complete corresponding data exists for **`r nrow(df_1990)`** rows after 1990.
+
+### ANOVA
+
+```{r SECTION 2 Q2.2}
 anova <- aov(`Imports of goods and services (% of GDP)` ~ continent, df_1990)
 
-summary(anova)
+aov_summary <- summary(anova)
 
+aov_summary
+
+```
+
+An ANOVA test does not show significant difference between Europe and Asia with respect to `'Imports of goods and services (% of GDP)'` with a p-value of **`r aov_summary[[1]][[5]][1]`** for the F statistic. Meaning there is a **`r percent(aov_summary[[1]][[5]][1])`** chance that the observed variation is due to random chance, which is usually not enough to reject the null hypothesis (that the samples come from the same population). P-value should be at least lower than 0.05 to reject the null hypothesis with a 95% confidence interval.   
+
+### Plots
+
+```{r SECTION 2 Q2.3}
 p <- df_1990 %>%
   ggplot(aes(
     x = continent,
@@ -302,13 +379,11 @@ p <- df_1990 %>%
 ggplotly(p)
 ```
 
-
+The box plots visually confirms there are not statistical differences. Both samples have a similar mean and somewhat similar interquartile range, although dispersion is higher in Asia.   
 
 ## Q3
 
 > What is the country (or countries) that has the highest `'Population density (people per sq. km of land area)'` across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)
-
-Average population density varies greatly from 0.139 to 14,732. The top 2 countries with the highest `'Population density (people per sq. km of land area)'` across all years are `Macao SAR, China` and `Monaco`.   
 
 
 ```{r SECTION 2 Q3.1}
@@ -321,7 +396,7 @@ df_pop <- df %>%
   ) %>%
   arrange(desc(AvgPopDensity))
 
-summary(df_pop)
+kable(summary(df_pop, maxsum = 0), caption = "Summary of variables")
 ```
 
 
@@ -344,16 +419,22 @@ p <- df %>%
   labs(title = "Top 5 countries by pop. density", x = "Country") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
+top_countries <- paste(df_pop_top[
+  1:2,
+  "Country Name"
+]$`Country Name`, sep = ", ")
+
 ggplotly(p)
 ```
+
+Average population density varies greatly (**`r range_format(df_pop$AvgPopDensity)`**). The top 2 countries with the highest `'Population density (people per sq. km of land area)'` across all years are **`r top_countries`**.   
+
 
 ## Q4
 
 > What country (or countries) has shown the greatest increase in `'Life expectancy at birth, total (years)'` since 1962? 
 
-In average, all countries increased life expectancy by ~30% from 1962 to 2007 (shown as a blue dotted line in the plot), however the top countries in this ranking yielded a ~100% (or 2x) increase. Continent data was incomplete so that was left out of the analysis.    
-
-The plot below shows the distribution of life expectancy increase (`Increase_LE`) across countries. Something to notice is that after the top 11th country (China) the rate of decrease starts slowing down (showing an elbow in the plot). For this reason, the top 11 countries were selected as the answer to the question presented, and plotted as a bar chart at the end.      
+    
 
 ```{r SECTION 2 Q4.1}
 df_life_incr <- df %>%
@@ -378,9 +459,17 @@ df_life_incr <- df %>%
   arrange(desc(Increase_LE)) %>%
   ungroup()
 
-summary(df_life_incr)
+kable(summary(df_life_incr), caption = "Summary of variables")
 ```
-```{r}
+
+
+In average, all countries increased life expectancy by ~30% from 1962 to 2007 (shown as a blue dotted line in the plot), however the top countries in this ranking yielded a ~100% (or 2x) increase. Continent data was incomplete so that was left out of the analysis.    
+
+The plot below shows the distribution of life expectancy increase (`Increase_LE`) across countries. Something to notice is that after the top 11th country (China) the rate of decrease starts slowing down (showing an elbow in the plot). For this reason, the top 11 countries were selected as the answer to the question presented, and plotted as a bar chart at the end.  
+
+### Plots
+
+```{r SECTION 2 Q4.2, warning=FALSE}
 p <- df_life_incr %>%
   ggplot(aes(y = Increase_LE, x = reorder(`Country Name`, -Increase_LE))) +
   geom_point() +
@@ -398,7 +487,8 @@ p <- df_life_incr %>%
 ggplotly(p)
 ```
 
-```{r SECTION 2 Q4.2}
+
+```{r SECTION 2 Q4.3}
 p <- df_life_incr %>%
   top_n(11, wt = Increase_LE) %>%
   ggplot(aes(
