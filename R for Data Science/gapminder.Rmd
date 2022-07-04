@@ -22,6 +22,7 @@ library(dplyr)
 library(tidyr)
 library(knitr)
 library(DT)
+library(broom)
 
 percent <- function(x, digits = 2) {
   paste0(formatC(x * 100, digits = digits, format = "f"), "%")
@@ -50,7 +51,8 @@ df <- as_tibble(read.csv("gapminder_clean.csv",
   mutate_all(~ na_if(., "")) %>%
   mutate(Year = as.factor(Year))
 
-datatable(df, caption = "Loaded dataset")
+datatable(df, caption = "Loaded dataset", options = list(
+  pageLength=50, scrollX='400px'))
 ```
 ### Variables characterization
 
@@ -235,7 +237,8 @@ model_base <- lm(
 
 model_base_summary <- summary(model_base)
 
-model_base_summary
+kable(tidy(model_base), caption = "Linear regression terms")
+kable(glance(model_base), caption = "Linear regression statistics")
 ```
 
 A linear regression for this data set shows that there are statistically significant differences across all continents (p-values < 0.05) in energy use. Being Oceania the continent with the highest consumption, and the lowest being Africa (which is the base, i.e. just intercept value). The regression coefficients show that, for example Asia consumes, in average, 1169 kg of oil equivalent yearly per person more than Africa, and 164 kg ($1169-1005$) more than the Americas.
@@ -253,6 +256,8 @@ The `Scale-Location` plot hints heteroscedasticity (non constant variance), whic
 
 Finally `Residuals vs Leverage` plot does not show points beyond Cook's distance, hinting that outliers are not to be expected (although there is a set of observations with high leverage, which could be further explored).   
 
+
+### Log transforming variables
  
 
 ```{r SECTION 2 Q1.4}
@@ -262,11 +267,11 @@ model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
 
 model_log_summary <- summary(model_log)
 
-model_log_summary
+kable(tidy(model_base), caption = "Linear regression (log transformed) terms")
+kable(glance(model_base), caption = "Linear regression (log transformed) statistics")
 
 ```
 
-### Log transforming variables
 
 In this case, the only variable that could be transformed is `Energy use (kg of oil equivalent per capita)`, as `continent` is discrete.   
 
@@ -304,12 +309,12 @@ df_continent <- df %>%
   filter(!is.na(continent) &
     !is.na(`Energy use (kg of oil equivalent per capita)`))
 
-model_log <- aov(log10(`Energy use (kg of oil equivalent per capita)`) ~
+model_aov <- aov(log10(`Energy use (kg of oil equivalent per capita)`) ~
   continent, df_continent)
 
-aov_summary <- summary(model_log)
+aov_summary <- summary(model_aov)
 
-aov_summary
+kable(tidy(model_aov), caption = "ANOVA terms")
 ```
 
 Not surprisingly, ANOVA confirms that there are statistical differences between continents for the variable in question, showing a very significant p-value of **`r aov_summary[[1]][[5]][1]`** (the interpretation of p-value is explained in more detail in the next analysis).
@@ -360,7 +365,7 @@ anova <- aov(`Imports of goods and services (% of GDP)` ~ continent, df_1990)
 
 aov_summary <- summary(anova)
 
-aov_summary
+kable(tidy(model_aov), caption = "ANOVA terms")
 
 ```
 
