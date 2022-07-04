@@ -52,7 +52,8 @@ df <- as_tibble(read.csv("gapminder_clean.csv",
   mutate(Year = as.factor(Year))
 
 datatable(df, caption = "Loaded dataset", options = list(
-  pageLength=50, scrollX='400px'))
+  pageLength = 50, scrollX = "400px"
+))
 ```
 ### Variables characterization
 
@@ -267,9 +268,12 @@ model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
 
 model_log_summary <- summary(model_log)
 
-kable(tidy(model_base), caption = "Linear regression (log transformed) terms")
-kable(glance(model_base), caption = "Linear regression (log transformed) statistics")
-
+kable(tidy(model_base),
+  caption = "Linear regression (log transformed) terms"
+)
+kable(glance(model_base),
+  caption = "Linear regression (log transformed) statistics"
+)
 ```
 
 
@@ -366,7 +370,6 @@ anova <- aov(`Imports of goods and services (% of GDP)` ~ continent, df_1990)
 aov_summary <- summary(anova)
 
 kable(tidy(model_aov), caption = "ANOVA terms")
-
 ```
 
 An ANOVA test does not show significant difference between Europe and Asia with respect to `'Imports of goods and services (% of GDP)'` with a p-value of **`r aov_summary[[1]][[5]][1]`** for the F statistic. Meaning there is a **`r percent(aov_summary[[1]][[5]][1])`** chance that the observed variation is due to random chance, which is usually not enough to reject the null hypothesis (that the samples come from the same population). P-value should be at least lower than 0.05 to reject the null hypothesis with a 95% confidence interval.   
