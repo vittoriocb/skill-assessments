@@ -268,10 +268,10 @@ model_log <- lm(log10(`Energy use (kg of oil equivalent per capita)`) ~
 
 model_log_summary <- summary(model_log)
 
-kable(tidy(model_base),
+kable(tidy(model_log),
   caption = "Linear regression (log transformed) terms"
 )
-kable(glance(model_base),
+kable(glance(model_log),
   caption = "Linear regression (log transformed) statistics"
 )
 ```
