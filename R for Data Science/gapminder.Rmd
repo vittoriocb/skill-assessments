@@ -23,6 +23,7 @@ library(tidyr)
 library(knitr)
 library(DT)
 library(broom)
+library(glue)
 
 percent <- function(x, digits = 2) {
   paste0(formatC(x * 100, digits = digits, format = "f"), "%")
@@ -43,16 +44,16 @@ range_format <- function(x, digits = 4) {
 
 
 
-```{r SECTION 1 Q1.1}
-df <- as_tibble(read.csv("gapminder_clean.csv",
-  check.names = FALSE,
-  stringsAsFactors = TRUE
-)[, -1]) %>%
+```{r SECTION 1 Q1.1, message = FALSE}
+df <- readr::read_csv("gapminder_clean.csv", show_col_types = FALSE) %>%
+  select(-1) %>%
   mutate_all(~ na_if(., "")) %>%
+  mutate(continent = as.factor(continent)) %>%
+  mutate(`Country Name` = as.factor(`Country Name`)) %>%
   mutate(Year = as.factor(Year))
 
 datatable(df, caption = "Loaded dataset", options = list(
-  pageLength = 50, scrollX = "400px"
+  pageLength = 10, scrollX = "400px"
 ))
 ```
 ### Variables characterization
@@ -79,14 +80,14 @@ There is a total of **`r nrow(unique(df[,"Country Name"]))`** countries across *
 ### Continuous variables distributions
 
 
-```{r SECTION 1 Q1.3, fig.width=20, fig.height=12}
+```{r SECTION 1 Q1.3, fig.width=8, fig.height=20}
 df %>%
   dplyr::select(where(is.numeric)) %>%
   gather() %>%
   filter(!is.na(value)) %>%
   ggplot(aes(value)) +
   geom_histogram(bins = 10) +
-  facet_wrap(~key, scales = "free")
+  facet_wrap(~key, scales = "free", ncol = 2)
 ```
 
 Most continuous variables show a somewhat exponential distribution. The exceptions being: `Fertility rate, total (births per woman)` (somewhat uniform), `Life expectancy at birth, total (years)` (somewhat normal with a skew), and `Services, etc., value added (% of GDP)` (normal). 
@@ -107,7 +108,9 @@ df_1962 <- df %>%
     `CO2 emissions (metric tons per capita)`
   )
 
-kable(summary(df_1962, maxsum = 0), caption = "Summary of variables")
+kable(summary(df_1962, maxsum = 0)[1:6, c(-1, -2)],
+  caption = "Summary of variables"
+)
 ```
 After filtering for the desired year, there is corresponding data for **`r nrow(unique(df_1962[,"Country Name"]))`** countries (removing NA values). `gdpPercap` ranges from **`r range_format(df_1962[,"gdpPercap"])`**, and showing a fairly linear relationship with `CO2 emissions (metric tons per capita)` which ranges from **`r range_format(df_1962[,"CO2 emissions (metric tons per capita)"])`**.  
 
@@ -137,7 +140,10 @@ result <- cor.test(df_1962$gdpPercap,
   use = "complete.obs"
 )
 
-print(result)
+kable(tidy(result),
+  caption =
+    "Correlation of CO2 emissions (metric tons per capita) vs gdpPercap"
+)
 ```
 
 
@@ -180,7 +186,9 @@ df_1967 <- df %>%
     `CO2 emissions (metric tons per capita)`, continent, pop
   )
 
-kable(summary(df_1967, maxsum = 0), caption = "Summary of variables")
+kable(summary(df_1967, maxsum = 0)[1:6, c(-1, -2, -5)],
+  caption = "Summary of variables"
+)
 
 p <- df_1967 %>%
   ggplot(aes(x = gdpPercap, y = `CO2 emissions (metric tons per capita)`)) +
@@ -216,7 +224,7 @@ df_continent <- df %>%
     `Country Name`
   )
 
-kable(summary(df_continent, maxsum = 6)[, 1:3],
+kable(summary(df_continent, maxsum = 6)[1:6, 1:3],
   caption = "Summary of variables"
 )
 ```
@@ -357,7 +365,7 @@ df_1990 <- df %>%
     !is.na(`Imports of goods and services (% of GDP)`)) %>%
   dplyr::select(continent, `Imports of goods and services (% of GDP)`, Year)
 
-kable(summary(df_1990), caption = "Summary of variables")
+kable(summary(df_1990)[1:6, ], caption = "Summary of variables")
 ```
 
 Complete corresponding data exists for **`r nrow(df_1990)`** rows after 1990.
@@ -393,49 +401,61 @@ The box plots visually confirms there are not statistical differences. Both samp
 
 > What is the country (or countries) that has the highest `'Population density (people per sq. km of land area)'` across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)
 
-
 ```{r SECTION 2 Q3.1}
-df_pop <- df %>%
+
+df_pop_rank <- df %>%
   filter(!is.na(`Population density (people per sq. km of land area)`)) %>%
-  group_by(`Country Name`) %>%
-  summarize(
-    AvgPopDensity =
-      mean(`Population density (people per sq. km of land area)`)
+  group_by(Year) %>%
+  select(
+    `Country Name`, Year,
+    `Population density (people per sq. km of land area)`
   ) %>%
-  arrange(desc(AvgPopDensity))
+  mutate(
+    YearlyRank =
+      dense_rank(desc(`Population density (people per sq. km of land area)`))
+  )
 
-kable(summary(df_pop, maxsum = 0), caption = "Summary of variables")
-```
+df_pop_top <- df_pop_rank %>%
+  group_by(desc(Year)) %>%
+  arrange(YearlyRank, .by_group = TRUE) %>%
+  ungroup() %>%
+  slice_head(n = 10)
 
-
-```{r SECTION 2 Q3.2}
-
-df_pop_top <- df_pop %>%
-  top_n(5, wt = AvgPopDensity)
-
-p <- df %>%
-  filter(`Country Name` %in% df_pop_top$`Country Name`) %>%
+p <- df_pop_rank %>%
+  subset(`Country Name` %in% df_pop_top$`Country Name`) %>%
   ggplot(aes(
-    y = `Population density (people per sq. km of land area)`,
-    x = reorder(
-      `Country Name`,
-      -`Population density (people per sq. km of land area)`
-    ),
-    col = `Country Name`
+    y = YearlyRank,
+    x = as.numeric(as.character(Year)),
   )) +
-  geom_boxplot() +
-  labs(title = "Top 5 countries by pop. density", x = "Country") +
+  geom_line(aes(color = `Country Name`, linetype = `Country Name`)) +
+  labs(
+    title =
+      "Top 10 countries (at year 2007) by population density ranking over time",
+    x = "Country",
+    y = "Population density yearly rank"
+  ) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
-top_countries <- paste(df_pop_top[
-  1:2,
-  "Country Name"
-]$`Country Name`, sep = ", ")
-
 ggplotly(p)
+
+top_countries <- df_pop_rank %>%
+  group_by(`Country Name`) %>%
+  summarize(
+    AvgRank =
+      mean(YearlyRank)
+  ) %>%
+  arrange(AvgRank) %>%
+  slice_head(n = 2)
+
+top_countries_str <- top_countries %>%
+  transmute(x = glue("{`Country Name`} (avg. rank {AvgRank})")) %>%
+  unlist() %>%
+  paste(collapse = "; ")
 ```
 
-Average population density varies greatly (**`r range_format(df_pop$AvgPopDensity)`**). The top 2 countries with the highest `'Population density (people per sq. km of land area)'` across all years are **`r top_countries`**.   
+Individual countries' yearly ranks of `'Population density (people per sq. km of land area)'` are fairly stable over time, as it can be observed in the plot above, with the exception of Bahrain, that shows an steep increase in rank year over year.    
+
+The top **`r nrow(top_countries)`** countries with the highest average ranking in this category across all years are **`r top_countries_str`**.   
 
 
 ## Q4
@@ -467,7 +487,7 @@ df_life_incr <- df %>%
   arrange(desc(Increase_LE)) %>%
   ungroup()
 
-kable(summary(df_life_incr), caption = "Summary of variables")
+kable(summary(df_life_incr)[1:6, c(-1, -2)], caption = "Summary of variables")
 ```
 
 
@@ -481,7 +501,10 @@ The plot below shows the distribution of life expectancy increase (`Increase_LE`
 p <- df_life_incr %>%
   ggplot(aes(y = Increase_LE, x = reorder(`Country Name`, -Increase_LE))) +
   geom_point() +
-  labs(title = "Countries by life expectancy increase since 1962") +
+  labs(
+    title = "Countries by life expectancy increase (1962 - 2007)",
+    y = "Life increase multiplier"
+  ) +
   geom_hline(
     yintercept = mean(df_life_incr$Increase_LE),
     linetype = "dotted", color = "blue"
@@ -506,8 +529,9 @@ p <- df_life_incr %>%
   geom_bar(stat = "identity") +
   labs(
     title =
-      "Top countries by life expectancy increase since 1962",
-    x = "Country"
+      "Top countries by life expectancy increase (1962 - 2007)",
+    x = "Country",
+    y = "Life increase multiplier"
   ) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
