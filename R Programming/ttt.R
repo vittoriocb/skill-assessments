@@ -5,7 +5,6 @@ status_won <- 1
 status_in_progress <- 2
 status_stalemate <- 3
 
-
 computer_play <- function(board, symbol) {
   # Reads the board and returns a choice of coordinates
 
@@ -145,22 +144,44 @@ next_turn <- function(turn) {
   ifelse(turn == symbols[1], symbols[2], symbols[1])
 }
 
+check_quit <- function(input) {
+  if (input == "Q") {
+    cat("Oops, game has been halted.\n")
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+pick_symbol <- function(con) {
+  player_symbol <- character(1)
+
+  while (!(player_symbol %in% symbols)) {
+    cat(paste0("Player please choose your symbol (X/O): "))
+    player_symbol <- toupper(readLines(con = con, n = 1))
+
+    if (check_quit(player_symbol)) {
+      break
+    }
+  }
+
+  return(player_symbol)
+}
+
 start_game <- function(con) {
   board <- reset_board()
   input <- numeric(1)
   turn <- symbols[1]
 
   print_board(board)
-  player_symbol <- character(1)
-  while (!(player_symbol %in% symbols)) {
-    cat(paste0("Player please choose your symbol (X/O): "))
-    player_symbol <- toupper(readLines(con = con, n = 1))
-  }
 
-  while (TRUE) {
+  player_symbol <- pick_symbol(con)
+
+
+  while (player_symbol %in% symbols) {
     new_board <- numeric(1)
 
     if (turn != player_symbol) {
+      # AI turn, computer plays
       play <- computer_play(board, turn)
       if (play == "") {
         cat("Oops, I cannot play a tile, this shouldn't have happened.", "\n")
@@ -168,24 +189,25 @@ start_game <- function(con) {
       }
       new_board <- add_to_board(board, turn, play)
     } else {
+      # Player turn
       cat(paste0("Player (", turn, ") enter coordinates (e.g. A3): "))
       input <- toupper(readLines(con = con, n = 1))
 
-      if (input == "Q") {
-        cat("Oops, game has been halted.", sep = "\n")
+      if (check_quit(input)) {
         break
       }
       new_board <- add_to_board(board, turn, input)
     }
 
     if (length(new_board) == 1) {
+      # Length of new_board is only 1 if player input is invalid
       cat("User input is invalid, try again", sep = "\n")
     } else {
+      # If player input is valid then advance the game
       board <- new_board
-      # did player turn win?
-      game_status <- win_condition(board)
-
       print_board(board)
+      # Did someone win?
+      game_status <- win_condition(board)
 
       if (is_game_finished(game_status, turn, player_symbol)) {
         break
