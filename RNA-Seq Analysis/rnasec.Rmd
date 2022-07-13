@@ -1,0 +1,547 @@
+---
+title: "RNA-Seq Analysis"
+author: "Vittorio Calcagno"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  
+  html_document:
+    toc: yes
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(plotly)
+library(ggplot2)
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(DT)
+library(broom)
+library(recount)
+library(DESeq2)
+library(reticulate)
+library(glue)
+library(testit)
+library(tidyverse)
+library(RColorBrewer)
+library(EnhancedVolcano)
+library(EnsDb.Hsapiens.v86)
+library(pheatmap)
+library(clusterProfiler)
+library(msigdbr)
+
+percent <- function(x, digits = 2) {
+  paste0(formatC(x * 100, digits = digits, format = "f"), "%")
+}
+
+range_format <- function(x, digits = 4) {
+  paste0(prettyNum(range(x), digits = digits, big.mark = ","),
+    collapse = " to "
+  )
+}
+```
+
+# Setup
+
+## Bioconductor packages installation
+
+The following code chunk is not run automatically, however the Bioconductor packages are required for running this Rmd. Please manually run this code chunk if any of the packages are missing, or just run it to check.
+
+```{r Install Bioconductor packages, eval = FALSE}
+if (!require("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+BiocManager::install("recount")
+BiocManager::install("DESeq2")
+BiocManager::install("apeglm")
+BiocManager::install("EnhancedVolcano")
+BiocManager::install("EnsDb.Hsapiens.v86")
+BiocManager::install("clusterProfiler")
+```
+
+
+## Download recount project data
+
+```{r Download recount project data}
+project <- "SRP038101"
+
+download_study(project)
+
+load(file.path(project, "rse_gene.Rdata"))
+
+rse_gene
+
+as.data.frame(assays(rse_gene))
+```
+## Download SRA metadata
+
+###Python virtual environment requirement
+
+**Please note the csv file with SRA metadata is already included with this Rmd, the following is only required if its desired to download the csv file from its original source**
+
+A Python packages named SRAweb is required to download SRA data, this package is installed in a virtual environment in ./env subdirectory of the Rmd working directory.
+
+Please follow instructions in readme.MD to create the Python virtual environment and install SRAweb package.
+
+```{r Load metadata from SRA}
+
+get_sra_metadata <- function(project) {
+  file_name <- glue("{project}_metadata.csv")
+
+  if (!file.exists(file_name)) {
+    # Activate Python virtual environment
+    if (.Platform$OS.type == "windows") {
+      use_python("env/Scripts")
+    } else {
+      use_python("env/bin")
+    }
+
+    py_run_string(glue(
+      "
+    from pysradb import SRAweb
+    db = SRAweb()
+    df = db.sra_metadata('{project}', detailed=True)
+    file_name = '{file_name}'
+    df.to_csv(file_name, index = False)
+    print('Project {project} metadata was saved to ' + file_name)
+    "
+    ))
+  }
+
+  read.csv(file_name, row.names = NULL)
+}
+
+
+data_meta <- get_sra_metadata(project)
+
+datatable(data_meta, caption = "SRA Metadata", options = list(
+  pageLength = 10, scrollX = "400px"
+))
+```
+## Data wrangling and loading into DESeq
+
+```{r Choose biological condition column}
+condition_column <- "treatment"
+```
+
+The biological condition of interest to investigate would be `r condition_column` given by the column of the same name
+
+```{r Make counts and metadata dfs}
+# Removes non samples columns
+df_count <- assays(rse_gene) %>%
+  as.data.frame() %>%
+  select(-c(1:2)) %>%
+  filter_all(any_vars(. != 0)) %>%
+  rownames_to_column() %>%
+  mutate(rowname = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
+  column_to_rownames()
+
+df_meta <- data_meta %>%
+  as_tibble() %>%
+  # subset(!is.na(hba1c)) %>%
+  rename(condition = as.symbol(condition_column)) %>% # treatment
+  # separate(phenotype, c("condition"), sep = "_") %>%
+  select(run_accession, condition) %>%
+  arrange(run_accession) %>%
+  subset(run_accession %in% colnames(df_count)) %>%
+  column_to_rownames(var = "run_accession") %>%
+  mutate(condition = str_replace_all(tolower(condition), " ", "_"))
+
+kable(df_meta, caption = "Samples by biological condition")
+```
+
+
+```{r Check dataframes}
+# Using relevel to set the correct resultNames coefficients for lfcShrink
+
+condition_base <- "untreated"
+condition_contrast <- "aza_treated"
+
+df_meta$condition <- relevel(as.factor(df_meta$condition), condition_base)
+
+idx <- match(rownames(df_meta), colnames(df_count))
+df_count <- df_count[, idx]
+
+assert(all(colnames(df_count) %in% rownames(df_meta)))
+assert(all(colnames(df_count) == rownames(df_meta)))
+```
+
+
+```{r Build dds}
+# Load data into dds object
+dds <- DESeqDataSetFromMatrix(
+  countData = df_count,
+  colData = df_meta,
+  design = ~condition
+)
+
+dds <- estimateSizeFactors(dds)
+```
+# Quality assessment
+
+Quality assessment is performed below in order to understand how the data will perform in a differential gene expression analysis.
+
+## PCA Plot
+
+```{r Normalize and transform}
+intgroup <- c("condition")
+
+# Normalize and transform counts
+vsd_all <- vst(dds, blind = TRUE)
+```
+
+```{r NOT SHOWN - Heatmap of correlations between samples, include = FALSE}
+vsd_all %>%
+  assay() %>%
+  cor() %>%
+  pheatmap(annotation = select(df_meta, intgroup))
+```
+
+```{r PCA Plot}
+plotPCA(vsd_all, intgroup = intgroup) + theme(aspect.ratio = 1)
+```
+The PCA plot, colored by condition of interest, looks promising, accounting for 97% among the first principal component dimension, and showing tight clusters with clear separation across groups.
+
+## Dispersion
+
+```{r Build DESeq object and plot dispersions}
+dds <- DESeq(dds)
+
+plotDispEsts(dds)
+```
+
+`Dispersion` vs `Mean of normalized counts` is plotted in order to see that the general assumption of the DESeq model holds, i.e. the dispersion decreases as the mean of (normalized) counts increases. In this case it can be observed that the general assumption of the model holds very well.
+
+# DESeq results and shrinkage
+
+```{r DESeq results}
+alpha <- 0.05
+dds_res <- results(dds,
+  contrast = c("condition", condition_contrast, condition_base),
+  alpha = alpha
+)
+
+head(data.frame(dds_res))
+summary(dds_res)
+resultsNames(dds)
+
+plotMA(dds_res)
+```
+DESeq results are obtained, and a plot of `Log fold change` vs `Mean of normalized counts` is presented, showing significant results in blue (with a threshold of `r alpha` for significance level). It can be observed that the points follow a somewhat normal distribution, with a long tail at the significant (blue) side.
+
+
+```{r DESeq shrinkage with stat}
+dds_res_shrink <- lfcShrink(dds, coef = 2, res = dds_res, type = "apeglm")
+
+dds_res_shrink %>%
+  data.frame() %>%
+  mutate(stat = log2FoldChange / lfcSE)
+
+plotMA(dds_res_shrink)
+```
+
+Coefficient shrinkage is performed, showing favorable effects in the distribution of `Log fold change` vs `Mean of normalized counts`, which now shows a more normal distribution.
+
+```{r include = FALSE}
+head(data.frame(dds_res_shrink))
+```
+
+
+```{r Build results dataframes and join with symbols}
+ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86,
+  keys = keys(EnsDb.Hsapiens.v86),
+  columns = c("SYMBOL")
+)
+
+resdf <- dds_res %>%
+  data.frame() %>%
+  subset(!is.na(stat)) %>%
+  rownames_to_column() %>%
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
+  dplyr::select(-rowname) %>%
+  inner_join(y = ens2sym, by = "GENEID") %>%
+  mutate(padj = case_when(padj == 0 ~ .Machine$double.xmin, TRUE ~ padj)) %>%
+  arrange(desc(stat))
+
+resdf_shrink <- dds_res_shrink %>%
+  data.frame() %>%
+  mutate(stat = log2FoldChange / lfcSE) %>%
+  subset(!is.na(stat)) %>%
+  rownames_to_column() %>%
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
+  dplyr::select(-rowname) %>%
+  inner_join(y = ens2sym, by = "GENEID") %>%
+  mutate(padj = case_when(padj == 0 ~ .Machine$double.xmin, TRUE ~ padj)) %>%
+  arrange(desc(stat))
+```
+
+
+```{r Show duplicates table}
+dupes <- duplicated(resdf_shrink_sig$SYMBOL) |
+  duplicated(resdf_shrink_sig$SYMBOL, fromLast = TRUE)
+
+kable(resdf_shrink_sig[dupes, ], caption = "Duplicated gene symbols")
+```
+
+
+## Duplicated symbols
+
+The gene symbols in the table above contains duplicated SYMBOLS, only the one with lowest padj will be kept when building GSEA rankings
+
+# Differentially expressed genes table
+
+```{r DEs datatable}
+
+resdf_shrink_sig <- resdf_shrink %>%
+  subset(log2FoldChange > 2 & padj < 0.05) %>%
+  select(GENEID, SYMBOL, log2FoldChange, padj, stat)
+
+
+datatable(resdf_shrink_sig)
+```
+In the table above a log2FoldChange threshold was enforced, as well as padj significance, in order to reduce the number of rows present in the table, showing only significantly under or over differentially expressed genes.
+
+# Volcano Plot
+
+```{r Volcano Plot, fig.height=7}
+
+p_cutoff <- 1e-100
+fc_cutoff <- 2
+ev <- EnhancedVolcano(resdf_shrink,
+  lab = resdf_shrink$SYMBOL,
+  pCutoff = p_cutoff,
+  FCcutoff = fc_cutoff, x = "log2FoldChange", y = "padj"
+)
+ev
+```
+The Volcano Plot shows only a few (n = `r nrow(ev$data[ev$data$Sig == "FC_P" & ev$data$log2FoldChange > 0,])`) genes in above the FC and P value thresholds in the over-expression side, and `r nrow(ev$data[ev$data$Sig == "FC_P" & ev$data$log2FoldChange < 0,])` in the under-expression side.
+
+```{r Save DEs to CSV, include = FALSE}
+resdf %>%
+  subset(padj < 0.01 & log2FoldChange > 2) %>%
+  write_csv(file = "over_expressed_genes.csv")
+
+resdf %>%
+  subset(padj < 0.01 & log2FoldChange < -2) %>%
+  write_csv(file = "under_expressed_genes.csv")
+```
+
+# Heatmap of DEGs
+
+```{r Get top 10 genes by pvalue by expression group}
+res_sig <- resdf_shrink %>%
+  mutate(expression = ifelse(log2FoldChange > 0, "over", "under")) %>%
+  group_by(expression) %>%
+  arrange(padj) %>%
+  slice(1:10) %>%
+  ungroup() %>%
+  column_to_rownames(var = "GENEID")
+
+res_sig_symbol <- res_sig %>%
+  as_tibble() %>%
+  column_to_rownames(var = "SYMBOL")
+
+# res_sig
+```
+
+
+```{r Heatmap of DEGs vs samples}
+normalized_counts <- counts(dds, normalize = TRUE)
+
+# Heatmap color palette
+heat_colors <- brewer.pal(n = 6, name = "YlOrRd")
+
+normalized_counts[rownames(res_sig), ] %>%
+  data.frame() %>%
+  rownames_to_column("GENEID") %>%
+  inner_join(y = ens2sym, by = "GENEID") %>%
+  column_to_rownames("SYMBOL") %>%
+  select(-GENEID) %>%
+  pheatmap(
+    color = heat_colors,
+    cluster_rows = TRUE,
+    show_rownames = TRUE,
+    annotation_col = select(df_meta, condition),
+    annotation_row = select(res_sig_symbol, expression),
+    scale = "row"
+  )
+```
+A heat map comparing correlation of top 10 over and under expressed genes was plotted. It can be observed that under expressed genes are highly positively correlated with untreated samples, but highly negatively correlated with treated samples, as it is expected (because after treatment under expressed gene count is differentially reduced). The same holds true with over (differentially) expressed genes, as they are initially negatively correlated with untreated samples, but once treated they become highly positively correlated.
+
+
+# GSEA (Gene Set Enrichment Analysis)
+
+```{r Load gene sets}
+gene_sets <- msigdbr(species = "Homo sapiens", category = "C5") %>%
+  dplyr::select(gs_name, gene_symbol)
+```
+
+
+```{r Build and plot GSEA metric}
+# Data is subsetted to contain only non NA padj
+# Reason for this is explained in the documentation:
+# https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#pvaluesNA
+# TLDR: NA padj are either 0 count or outliers
+resdf2 <- resdf_shrink %>%
+  subset(!is.na(padj)) %>%
+  mutate(gsea_metric = stat) %>%
+  mutate(padj_rank = -log10(padj) * sign(log2FoldChange)) %>%
+  subset(!is.na(gsea_metric)) %>%
+  arrange(desc(gsea_metric))
+
+hist(resdf2$gsea_metric,
+  breaks = 100,
+  main = "Histogram of GSEA metric", xlab = "GSEA metric"
+)
+```
+An histogram of GSEA metric is presented, showing a normal distribution, with a mild skew on the > 0 side.
+
+By dropping rows where padj = NA, the ties in the preranked stats is reduced from ~12% to ~2%
+
+```{r Build ranks df and run GSEA, warning=FALSE}
+ranks <- resdf2 %>%
+  select(SYMBOL, gsea_metric) %>%
+  distinct(SYMBOL, .keep_all = TRUE) %>%
+  deframe()
+
+gseares <- GSEA(
+  geneList = ranks,
+  TERM2GENE = gene_sets, eps = 0
+)
+
+gsearesdf <- as.data.frame(gseares)
+```
+
+
+## GSEA Dot Plot
+
+```{r GSEA Dot Plot, fig.width = 12}
+dotplot(gseares,
+  showCategory = 5,
+  split = ".sign", font.size = 6
+) + facet_grid(. ~ .sign)
+```
+
+### A note in dotplot ordering
+
+Its important to note that dotplot() uses p.adjust together with showCategory to decide the top n gene sets that make the cut and are therefore displayed in the graph, after that, the results are ordered by GeneRatio. An implementation of the ordering logic in tidy can be seen in the code chunks below.
+
+### A note in Gene Ontology (GO)
+
+It could be helpful for the reader to understand relevant definitions of the nomenclature that the gene sets use:
+
+GOBP: Biological process, refers to the biological program which the gene set pathway is thought to be responsible of.
+GOCC: Cellular compartment, refers to the physical location (in the cell) where the gene set pathway takes place.
+
+http://geneontology.org/docs/ontology-documentation/
+
+
+# Pathways and biological interpretation
+
+The plot above shows the top 10 pathways (by padj), either suppressed or activated by differential gene expression. For deeper analysis, top 100 pathways (using the same sorting algorithm) were assessed, and presented in the data tables below.
+
+
+## Suppressed pathways
+
+```{r Build suppressed pathways df}
+gsearesdf2_down <- gsearesdf %>%
+  mutate(Count = lengths(regmatches(
+    core_enrichment,
+    gregexpr("/", core_enrichment)
+  )) + 1) %>%
+  mutate(GeneRatio = Count / setSize, .sign = sign(enrichmentScore)) %>%
+  arrange(p.adjust) %>%
+  # In case of ties in p.adjust the following 2 lines break the tie by GeneRatio
+  group_by(p.adjust) %>%
+  arrange(desc(GeneRatio), .by_group = TRUE) %>%
+  ungroup() %>%
+  subset(.sign < 0) %>%
+  slice_head(n = 100) %>%
+  arrange(desc(GeneRatio)) %>%
+  select(ID, enrichmentScore, p.adjust, GeneRatio)
+
+
+datatable(gsearesdf2_down, caption = "Suppressed pathways")
+```
+
+
+### By Location
+
+Most suppressed pathways seem to be located in the cell nucleus (although there is one mention of GOCC_MITOCHONDRIAL_MATRIX), mostly at chromosomal regions, there are pathways specifically indicative of mitosis (GOCC_CONDENSED_CHROMOSOME, GOCC_CHROMOSOME_CENTROMERIC_REGION, GOCC_MITOTIC_SPINDLE, GOCC_SPINDLE)
+
+### By Biological Process
+
+Suppressed pathways are generally indicative of processes that occur during and around mitosis
+
+### Elucidation and further research
+
+It can be concluded that the treatment is arresting cell growth, which can help explain its effectiveness as a cancer drug.
+
+Further research could be conducted as to how the treatment is arresting cell growth. Because it was mentioned that suppressed pathways are over represented in mitosis (both in location and process), it would be helpful to look at genes known to be involved in arresting the cell in mitosis (e.g. p53 and RB)
+
+For example, looking at the expression of p53 it can be noticed that it is down regulated (lfc = `r resdf2[resdf2$SYMBOL == 'TP53',]$log2FoldChange`), however, more p53 related genes are up regulated (n = `r nrow(resdf2[grepl("TP53", resdf2$SYMBOL) & resdf2$log2FoldChange > 0,])`) vs `r nrow(resdf2[grepl("TP53", resdf2$SYMBOL) & resdf2$log2FoldChange < 0,])`  down regulated (including p53 itself), therefore p53 could be playing a role in arresting the cell in mitosis.
+
+## Activated pathways
+
+```{r Build activated pathways df}
+gsearesdf2_up <- gsearesdf %>%
+  mutate(Count = lengths(regmatches(
+    core_enrichment,
+    gregexpr("/", core_enrichment)
+  )) + 1) %>%
+  mutate(GeneRatio = Count / setSize, .sign = sign(enrichmentScore)) %>%
+  arrange(p.adjust) %>%
+  # In case of ties in p.adjust the following 2 lines break the tie by GeneRatio
+  group_by(p.adjust) %>%
+  arrange(desc(GeneRatio), .by_group = TRUE) %>%
+  ungroup() %>%
+  subset(.sign > 0) %>%
+  slice_head(n = 100) %>%
+  arrange(desc(GeneRatio)) %>%
+  select(ID, enrichmentScore, p.adjust, GeneRatio)
+
+
+datatable(gsearesdf2_up, caption = "Activated pathways")
+```
+
+
+### By Location
+
+Activated pathways seem to be located outside the cell (e.g. GOCC_COLLAGEN_CONTAINING_EXTRACELLULAR_MATRIX, GOCC_CELL_SUBSTRATE_JUNCTION, GOCC_EXTERNAL_ENCAPSULATING_STRUCTURE	), in the cellular membrane (e.g. GOCC_PLASMA_MEMBRANE_PROTEIN_COMPLEX, GOCC_EXTERNAL_SIDE_OF_PLASMA_MEMBRANE) and vesicles part of phagocytosis (e.g. GOCC_PHAGOCYTIC_VESICLE, GOCC_ENDOCYTIC_VESICLE).
+
+
+### By Biological Process
+
+Activated pathways are part of biological processes indicative of myeloid cell differentiation into leukocytes and corresponding activity (related to immune response).
+
+
+### Elucidation and further research
+
+The treatment is promoting myeloid cell differentiation, specifically into leukocytes. Taken in the context of the biological condition of the studied cell line (AML3), it can be understood how the treatment can be effective ameliorating the disease by suppressing cell growth and promoting cell differentiation, both hallmarks of the pathological state (i.e. uncontrolled proliferation of hematopoietic [hence undifferentiated] cells).
+
+Further research could be conducted in order to detect particular oncogenes that may be up regulated, while not necessarily significant to an known pathway. For example, Yao-Chung Liu et al. propose that a hypomethylating agent used to treat MDS could be responsible for activating dormant oncogene SALL4 (https://www.nejm.org/doi/10.1056/NEJMoa2119771). 
+
+In the treatment in question in this analysis (Azacytidine), SALL4 is not significantly differentially expressed (padj = `r resdf2[resdf2$SYMBOL == 'SALL4',]$padj`), however there are many other oncogenes to assess.
+
+
+
+```{r NOT SHOWN - GSEA plots, fig.height=6, include = FALSE}
+gseaplot(gseares,
+  geneSetID =
+    "GOCC_PRERIBOSOME"
+)
+gseaplot(gseares,
+  geneSetID =
+    "GOBP_NEGATIVE_REGULATION_OF_LEUKOCYTE_MEDIATED_IMMUNITY"
+)
+gseaplot(gseares,
+  geneSetID =
+    "GOBP_ANTIGEN_PROCESSING_AND_PRESENTATION"
+)
+```
