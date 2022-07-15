@@ -54,9 +54,9 @@ The dataset contains RNA-Seq counts for OCI-AML3 cells treated with azacytidine 
 
 OCI-AML3 cells carry an NPM1 gene mutation (type A) and the DNMT3A R882C mutation (http://www.ebi.ac.uk/efo/EFO_0006289).
 
-Azacytidine, a cytidine analogue, inhibits DNA methyltransferase, resulting in hypomethylation of promoter regions. It is an approved treatment used in myelodysplasic syndrome and myeloid leukemia.
+Azacytidine, a cytidine analogue, inhibits DNA methyltransferase, resulting in hypomethylation of promoter regions. It is an approved treatment used in myelodysplastic syndrome (MDS) and myeloid leukemia (ML).
 
-Analysis shows several differentially expressed genes, more in the over expressed side than in the under expressed side, with a similar pattern observed in differentially expressed pathways, obtained by gene set enrichment analysis (GSEA). It is hypothesized that this could be related to the fact that treatment with hypomethylating agents result in increased gene expression.
+Analysis shows several differentially expressed genes, more in the over expressed side than in the under expressed side, with a similar pattern observed in differentially expressed pathways, obtained by gene set enrichment analysis (GSEA). It is hypothesized that this could be related to the fact that treatment with hypomethylating agents results in increased gene expression.
 
 Treatment with azacytidine results in suppression of pathways related to cell proliferation and activation of pathways signature of leukocytes differentiation and immune response. It is hypothesized that this effect could explain the effectiveness of the treatment in the disease in question, that is characterized by uncontrolled proliferation of hematopoetic (hence undifferentiated) cells. 
 
@@ -110,7 +110,7 @@ The metadata (biological condition of samples) is obtained from NCBI's SRA.
 
 **Python virtual environment requirement: Please note the csv file with SRA metadata is already included with this Rmd, the following is only required if its desired to download the csv file from its original source**
 
-A Python packages named SRAweb is required to download SRA data, this package is installed in a virtual environment in ./env subdirectory of the Rmd working directory.
+A Python packages named SRAweb is required to download SRA data, this package is installed in a virtual environment in ./env sub-directory of the Rmd working directory.
 
 Please follow instructions in readme.MD to create the Python virtual environment and install SRAweb package.
 
