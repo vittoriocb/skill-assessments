@@ -46,6 +46,21 @@ range_format <- function(x, digits = 4) {
 }
 ```
 
+# Abstract
+
+A differential expression (DE) analysis is presented on a dataset obtained from a paper published by Lund K, Cole JJ. et al. with name "DNMT inhibitors reverse a specific signature of aberrant promoter DNA methylation and associated gene silencing in AML" (https://pubmed.ncbi.nlm.nih.gov/25315154/).
+
+The dataset contains RNA-Seq counts for OCI-AML3 cells treated with azacytidine and untreated cells as control.
+
+OCI-AML3 cells carry an NPM1 gene mutation (type A) and the DNMT3A R882C mutation (http://www.ebi.ac.uk/efo/EFO_0006289).
+
+Azacytidine, a cytidine analogue, inhibits DNA methyltransferase, resulting in hypomethylation of promoter regions. It is an approved treatment used in myelodysplasic syndrome and myeloid leukemia.
+
+Analysis shows several differentially expressed genes, more in the over expressed side than in the under expressed side, with a similar pattern observed in differentially expressed pathways, obtained by gene set enrichment analysis (GSEA). It is hypothesized that this could be related to the fact that treatment with hypomethylating agents result in increased gene expression.
+
+Treatment with azacytidine results in suppression of pathways related to cell proliferation and activation of pathways signature of leukocytes differentiation and immune response. It is hypothesized that this effect could explain the effectiveness of the treatment in the disease in question, that is characterized by uncontrolled proliferation of hematopoetic (hence undifferentiated) cells. 
+
+
 # Setup
 
 ## Bioconductor packages installation
@@ -65,25 +80,35 @@ BiocManager::install("EnsDb.Hsapiens.v86")
 BiocManager::install("clusterProfiler")
 ```
 
-
 ## Download recount project data
 
-```{r Download recount project data}
+
+```{r Download recount project data, message = FALSE}
 project <- "SRP038101"
 
-download_study(project)
+recount_filepath <- file.path(project, "rse_gene.Rdata")
 
-load(file.path(project, "rse_gene.Rdata"))
+if (!file.exists(recount_filepath)) {
+  download_study(project)
+}
 
+load(recount_filepath)
+```
+
+
+The recount data for project *`r project`* is provided with this Rmd, however it would be automatically downloaded if missing.
+
+```{r NOT SHOWN - Recount project data, include = FALSE}
 rse_gene
 
 as.data.frame(assays(rse_gene))
 ```
+
 ## Download SRA metadata
 
-###Python virtual environment requirement
+The metadata (biological condition of samples) is obtained from NCBI's SRA.
 
-**Please note the csv file with SRA metadata is already included with this Rmd, the following is only required if its desired to download the csv file from its original source**
+**Python virtual environment requirement: Please note the csv file with SRA metadata is already included with this Rmd, the following is only required if its desired to download the csv file from its original source**
 
 A Python packages named SRAweb is required to download SRA data, this package is installed in a virtual environment in ./env subdirectory of the Rmd working directory.
 
@@ -92,7 +117,7 @@ Please follow instructions in readme.MD to create the Python virtual environment
 ```{r Load metadata from SRA}
 
 get_sra_metadata <- function(project) {
-  file_name <- glue("{project}_metadata.csv")
+  file_name <- file.path(project, glue("{project}_metadata.csv"))
 
   if (!file.exists(file_name)) {
     # Activate Python virtual environment
@@ -124,16 +149,16 @@ datatable(data_meta, caption = "SRA Metadata", options = list(
   pageLength = 10, scrollX = "400px"
 ))
 ```
+
 ## Data wrangling and loading into DESeq
 
 ```{r Choose biological condition column}
 condition_column <- "treatment"
 ```
 
-The biological condition of interest to investigate would be `r condition_column` given by the column of the same name
+The biological condition of interest to investigate would be *`r condition_column`*, given by the column of the same name.
 
 ```{r Make counts and metadata dfs}
-# Removes non samples columns
 df_count <- assays(rse_gene) %>%
   as.data.frame() %>%
   select(-c(1:2)) %>%
@@ -173,7 +198,7 @@ assert(all(colnames(df_count) == rownames(df_meta)))
 ```
 
 
-```{r Build dds}
+```{r Build dds, message = FALSE}
 # Load data into dds object
 dds <- DESeqDataSetFromMatrix(
   countData = df_count,
@@ -183,6 +208,7 @@ dds <- DESeqDataSetFromMatrix(
 
 dds <- estimateSizeFactors(dds)
 ```
+
 # Quality assessment
 
 Quality assessment is performed below in order to understand how the data will perform in a differential gene expression analysis.
@@ -206,11 +232,12 @@ vsd_all %>%
 ```{r PCA Plot}
 plotPCA(vsd_all, intgroup = intgroup) + theme(aspect.ratio = 1)
 ```
+
 The PCA plot, colored by condition of interest, looks promising, accounting for 97% among the first principal component dimension, and showing tight clusters with clear separation across groups.
 
 ## Dispersion
 
-```{r Build DESeq object and plot dispersions}
+```{r Build DESeq object and plot dispersions, message = FALSE}
 dds <- DESeq(dds)
 
 plotDispEsts(dds)
@@ -227,28 +254,28 @@ dds_res <- results(dds,
   alpha = alpha
 )
 
+plotMA(dds_res)
+```
+
+DESeq results are obtained, and a plot of `Log fold change` vs `Mean of normalized counts` is presented, showing significant results in blue (with a threshold of `r alpha` for significance level). It can be observed that the points follow a somewhat normal distribution, with a long tail at the significant (blue) side.
+
+```{r NOT SHOWN - DESeq results, include = FALSE}
 head(data.frame(dds_res))
 summary(dds_res)
 resultsNames(dds)
-
-plotMA(dds_res)
 ```
-DESeq results are obtained, and a plot of `Log fold change` vs `Mean of normalized counts` is presented, showing significant results in blue (with a threshold of `r alpha` for significance level). It can be observed that the points follow a somewhat normal distribution, with a long tail at the significant (blue) side.
+
 
 
 ```{r DESeq shrinkage with stat}
 dds_res_shrink <- lfcShrink(dds, coef = 2, res = dds_res, type = "apeglm")
-
-dds_res_shrink %>%
-  data.frame() %>%
-  mutate(stat = log2FoldChange / lfcSE)
 
 plotMA(dds_res_shrink)
 ```
 
 Coefficient shrinkage is performed, showing favorable effects in the distribution of `Log fold change` vs `Mean of normalized counts`, which now shows a more normal distribution.
 
-```{r include = FALSE}
+```{r NOT SHOWN - Shrinked coeffs df, include = FALSE}
 head(data.frame(dds_res_shrink))
 ```
 
@@ -259,8 +286,14 @@ ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86,
   columns = c("SYMBOL")
 )
 
+# Data is subsetted to contain only non NA padj
+# Reason for this is explained in the documentation:
+# https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#pvaluesNA
+# TLDR: NA padj are either 0 count or outliers
+
 resdf <- dds_res %>%
   data.frame() %>%
+  subset(!is.na(padj)) %>%
   subset(!is.na(stat)) %>%
   rownames_to_column() %>%
   mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
@@ -272,6 +305,7 @@ resdf <- dds_res %>%
 resdf_shrink <- dds_res_shrink %>%
   data.frame() %>%
   mutate(stat = log2FoldChange / lfcSE) %>%
+  subset(!is.na(padj)) %>%
   subset(!is.na(stat)) %>%
   rownames_to_column() %>%
   mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) %>%
@@ -282,18 +316,6 @@ resdf_shrink <- dds_res_shrink %>%
 ```
 
 
-```{r Show duplicates table}
-dupes <- duplicated(resdf_shrink_sig$SYMBOL) |
-  duplicated(resdf_shrink_sig$SYMBOL, fromLast = TRUE)
-
-kable(resdf_shrink_sig[dupes, ], caption = "Duplicated gene symbols")
-```
-
-
-## Duplicated symbols
-
-The gene symbols in the table above contains duplicated SYMBOLS, only the one with lowest padj will be kept when building GSEA rankings
-
 # Differentially expressed genes table
 
 ```{r DEs datatable}
@@ -303,8 +325,11 @@ resdf_shrink_sig <- resdf_shrink %>%
   select(GENEID, SYMBOL, log2FoldChange, padj, stat)
 
 
-datatable(resdf_shrink_sig)
+datatable(resdf_shrink_sig, options = list(
+  pageLength = 10, scrollX = "400px"
+))
 ```
+
 In the table above a log2FoldChange threshold was enforced, as well as padj significance, in order to reduce the number of rows present in the table, showing only significantly under or over differentially expressed genes.
 
 # Volcano Plot
@@ -320,7 +345,10 @@ ev <- EnhancedVolcano(resdf_shrink,
 )
 ev
 ```
-The Volcano Plot shows only a few (n = `r nrow(ev$data[ev$data$Sig == "FC_P" & ev$data$log2FoldChange > 0,])`) genes in above the FC and P value thresholds in the over-expression side, and `r nrow(ev$data[ev$data$Sig == "FC_P" & ev$data$log2FoldChange < 0,])` in the under-expression side.
+
+The Volcano Plot shows only a few (n = `r nrow(ev$data[ev$data$Sig == "FC_P" & ev$data$log2FoldChange > 0,])`) genes above the FC and P value thresholds in the over-expression side, and `r nrow(ev$data[ev$data$Sig == "FC_P" & ev$data$log2FoldChange < 0,])` in the under-expression side, in other words, there are more genes significantly differentially over expressed than under expressed.
+
+This could be related to the fact that azacytidine is an hypomethylating agent, that results in elevated gene expression (by demethylating promoter regions of genes, allowing transcription). 
 
 ```{r Save DEs to CSV, include = FALSE}
 resdf %>%
@@ -372,7 +400,10 @@ normalized_counts[rownames(res_sig), ] %>%
     scale = "row"
   )
 ```
+
 A heat map comparing correlation of top 10 over and under expressed genes was plotted. It can be observed that under expressed genes are highly positively correlated with untreated samples, but highly negatively correlated with treated samples, as it is expected (because after treatment under expressed gene count is differentially reduced). The same holds true with over (differentially) expressed genes, as they are initially negatively correlated with untreated samples, but once treated they become highly positively correlated.
+
+Looking at individual genes, there is a number of genes in the over expressed side that are related to immune-response function. These genes are: LYZ, COL1A2 (extra-cellular matrix movement), HLA-B, HLA-C, IFI27 and ISG15 (6 out of 10). However, such a distinction could not be made in the under expressed side. One hypothesis for this could be that, as mentioned before, there is a set of genes in the over expressed side that are highly significantly over expressed, meaning that fewer genes could help explain cellular behavior or processes; while the same would have to be explained by a larger number of genes in the under expressed side, as genes there are less significantly differentially expressed, and therefore individual gene contribution to cellular behavior could be less meaningful.
 
 
 # GSEA (Gene Set Enrichment Analysis)
@@ -384,12 +415,7 @@ gene_sets <- msigdbr(species = "Homo sapiens", category = "C5") %>%
 
 
 ```{r Build and plot GSEA metric}
-# Data is subsetted to contain only non NA padj
-# Reason for this is explained in the documentation:
-# https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#pvaluesNA
-# TLDR: NA padj are either 0 count or outliers
 resdf2 <- resdf_shrink %>%
-  subset(!is.na(padj)) %>%
   mutate(gsea_metric = stat) %>%
   mutate(padj_rank = -log10(padj) * sign(log2FoldChange)) %>%
   subset(!is.na(gsea_metric)) %>%
@@ -400,11 +426,30 @@ hist(resdf2$gsea_metric,
   main = "Histogram of GSEA metric", xlab = "GSEA metric"
 )
 ```
-An histogram of GSEA metric is presented, showing a normal distribution, with a mild skew on the > 0 side.
 
-By dropping rows where padj = NA, the ties in the preranked stats is reduced from ~12% to ~2%
+An histogram of GSEA metric is presented, showing a normal distribution, with a mild skew on the > 0 side, which is consistent with what was seen before (more significant genes in the over expression side).
 
-```{r Build ranks df and run GSEA, warning=FALSE}
+By dropping rows where padj = NA (outliers), the ties in the preranked stats were reduced from ~12% to ~2%.
+
+## Duplicated symbols
+
+The gene symbols in the table below contains duplicated SYMBOLS, only the one with lowest padj (of each group of symbols) will be kept when building GSEA rankings.
+
+```{r Show duplicates table}
+dupes <- duplicated(resdf_shrink$SYMBOL) |
+  duplicated(resdf_shrink$SYMBOL, fromLast = TRUE)
+
+resdf_shrink[dupes, ] %>%
+  group_by(SYMBOL) %>%
+  arrange(pvalue, .by_group = TRUE) %>%
+  ungroup() %>%
+  datatable(caption = "Duplicated gene symbols", options = list(
+    pageLength = 10, scrollX = "400px"
+  ))
+```
+
+
+```{r Build ranks df and run GSEA, message = FALSE, warning = FALSE}
 ranks <- resdf2 %>%
   select(SYMBOL, gsea_metric) %>%
   distinct(SYMBOL, .keep_all = TRUE) %>%
@@ -421,7 +466,7 @@ gsearesdf <- as.data.frame(gseares)
 
 ## GSEA Dot Plot
 
-```{r GSEA Dot Plot, fig.width = 12}
+```{r GSEA Dot Plot, fig.width = 8}
 dotplot(gseares,
   showCategory = 5,
   split = ".sign", font.size = 6
@@ -446,6 +491,7 @@ http://geneontology.org/docs/ontology-documentation/
 
 The plot above shows the top 10 pathways (by padj), either suppressed or activated by differential gene expression. For deeper analysis, top 100 pathways (using the same sorting algorithm) were assessed, and presented in the data tables below.
 
+In total, there were *`nrow(gsearesdf[gsearesdf$NES > 0,])`* significantly activated pathways, and *`nrow(gsearesdf[gsearesdf$NES > 0,])`* significantly suppressed pathways. It could be hypothesized that the fact that there are more activated than suppressed pathways, could support that the underlying diseases is related to mutations resulting in loss of function.
 
 ## Suppressed pathways
 
@@ -467,25 +513,28 @@ gsearesdf2_down <- gsearesdf %>%
   select(ID, enrichmentScore, p.adjust, GeneRatio)
 
 
-datatable(gsearesdf2_down, caption = "Suppressed pathways")
+datatable(gsearesdf2_down, caption = "Suppressed pathways", options = list(
+  pageLength = 10, scrollX = "400px"
+))
 ```
-
 
 ### By Location
 
-Most suppressed pathways seem to be located in the cell nucleus (although there is one mention of GOCC_MITOCHONDRIAL_MATRIX), mostly at chromosomal regions, there are pathways specifically indicative of mitosis (GOCC_CONDENSED_CHROMOSOME, GOCC_CHROMOSOME_CENTROMERIC_REGION, GOCC_MITOTIC_SPINDLE, GOCC_SPINDLE)
+Most suppressed pathways seem to be located in the cell nucleus (although there is one mention of GOCC_MITOCHONDRIAL_MATRIX), mostly at chromosomal regions, there are pathways specifically indicative of mitosis (GOCC_CONDENSED_CHROMOSOME, GOCC_CHROMOSOME_CENTROMERIC_REGION, GOCC_MITOTIC_SPINDLE, GOCC_SPINDLE).
 
 ### By Biological Process
 
-Suppressed pathways are generally indicative of processes that occur during and around mitosis
+Suppressed pathways are generally indicative of processes that occur during and around mitosis.
 
 ### Elucidation and further research
 
 It can be concluded that the treatment is arresting cell growth, which can help explain its effectiveness as a cancer drug.
 
-Further research could be conducted as to how the treatment is arresting cell growth. Because it was mentioned that suppressed pathways are over represented in mitosis (both in location and process), it would be helpful to look at genes known to be involved in arresting the cell in mitosis (e.g. p53 and RB)
+Further research could be conducted as to how the treatment is arresting cell growth. Because it was mentioned that suppressed pathways are over represented in mitosis (both in location and process), it would be helpful to look at genes known to be involved in arresting the cell in mitosis (e.g. p53 and RB).
 
 For example, looking at the expression of p53 it can be noticed that it is down regulated (lfc = `r resdf2[resdf2$SYMBOL == 'TP53',]$log2FoldChange`), however, more p53 related genes are up regulated (n = `r nrow(resdf2[grepl("TP53", resdf2$SYMBOL) & resdf2$log2FoldChange > 0,])`) vs `r nrow(resdf2[grepl("TP53", resdf2$SYMBOL) & resdf2$log2FoldChange < 0,])`  down regulated (including p53 itself), therefore p53 could be playing a role in arresting the cell in mitosis.
+
+Following the previous example, one biological experiment to assess the role of p53 in this particular case, would be to use CRISPR/Cas9 to knock down the gene in the AML3 cell line, obtain RNA-Seq counts, and repeat the DESeq analysis, controlling for the CRISPR samples. A similar procedure was performed by Norouzi-Barough L. et al. (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5811757/).
 
 ## Activated pathways
 
@@ -507,7 +556,9 @@ gsearesdf2_up <- gsearesdf %>%
   select(ID, enrichmentScore, p.adjust, GeneRatio)
 
 
-datatable(gsearesdf2_up, caption = "Activated pathways")
+datatable(gsearesdf2_up, caption = "Activated pathways", options = list(
+  pageLength = 10, scrollX = "400px"
+))
 ```
 
 
@@ -529,7 +580,7 @@ Further research could be conducted in order to detect particular oncogenes that
 
 In the treatment in question in this analysis (Azacytidine), SALL4 is not significantly differentially expressed (padj = `r resdf2[resdf2$SYMBOL == 'SALL4',]$padj`), however there are many other oncogenes to assess.
 
-
+Although not presented in this analysis, GSEA plots could also be used to understand gene participation in pathways, which could be of use when there is special interest in a particular pathway.
 
 ```{r NOT SHOWN - GSEA plots, fig.height=6, include = FALSE}
 gseaplot(gseares,
